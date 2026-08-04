@@ -205,7 +205,11 @@ function RescueDogDetailPage() {
             <div className="lg:col-span-1">
               {/* Photo placeholder */}
               <div className="flex h-64 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)] lg:h-80">
-                <span className="text-9xl">{dogEmoji(dog.breed)}</span>
+                {dog.photo_url ? (
+                  <img src={dog.photo_url} alt={`${dog.name} — ${dog.breed}`} className="h-full w-full rounded-2xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                ) : (
+                  <span className="text-9xl">{dogEmoji(dog.breed)}</span>
+                )}
               </div>
 
               {/* Key stats card */}

@@ -61,7 +61,14 @@ async function seedVenues() {
   await sql`CREATE TABLE IF NOT EXISTS venues (id SERIAL PRIMARY KEY,name TEXT NOT NULL,type TEXT NOT NULL,address TEXT NOT NULL,city TEXT NOT NULL,lat NUMERIC(10,7) NOT NULL,lng NUMERIC(10,7) NOT NULL,description TEXT,dog_features TEXT[],rating NUMERIC(3,1) DEFAULT 4.5,image_url TEXT,created_at TIMESTAMPTZ DEFAULT NOW())`;
   const [count] = await sql`SELECT COUNT(*)::int AS count FROM venues`;
   const venues = [["Parc de la Villette","park"],["Woof Café Bastille","cafe"],["Le Bouledogue Bar","bar"],["Maxi Zoo Nation","pet store"],["Parc de la Tête d'Or","park"],["Café des Chiens","cafe"],["Jardin des Plantes","park"],["Paws & Coffee","cafe"],["La Trattoria Canine","restaurant"],["Caniparc Vincennes","park"],["Dog & Co Market","pet store"],["Terrasse Montsouris","restaurant"]] as const;
-  if (Number(count.count) < 10) for (let i = Number(count.count); i < venues.length; i++) { const v = venues[i]; await sql`INSERT INTO venues (name,type,address,city,lat,lng,description,dog_features,rating,image_url) VALUES (${v[0]},${v[1]},${`${12 + i} Avenue des Amis, ${paris[i]}`},'Paris',${48.82 + i * .006},${2.28 + i * .012},'A welcoming Paris destination where dogs are celebrated.','{water bowls,outdoor seating,dog treats}',${(4.4 + (i % 6) / 10).toFixed(1)},${`https://placedog.net/600/400?random=venue-${i}`})`; }
+  const venuePhotos: Record<string, string> = {
+    "Parc de la Villette": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Parc_de_la_Villette_-_Grande_Halle.jpg/800px-Parc_de_la_Villette_-_Grande_Halle.jpg",
+    "Parc de la Tête d'Or": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Parc_de_la_T%C3%AAte_d%27or_-_Lac.jpg/800px-Parc_de_la_T%C3%AAte_d%27or_-_Lac.jpg",
+    "Jardin des Plantes": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Jardin_des_Plantes_de_Paris_2012.jpg/800px-Jardin_des_Plantes_de_Paris_2012.jpg",
+    "Caniparc Vincennes": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Bois_de_Vincennes_-_Lac_Daumesnil.jpg/800px-Bois_de_Vincennes_-_Lac_Daumesnil.jpg",
+  };
+  if (Number(count.count) < 10) for (let i = Number(count.count); i < venues.length; i++) { const v = venues[i]; await sql`INSERT INTO venues (name,type,address,city,lat,lng,description,dog_features,rating,image_url) VALUES (${v[0]},${v[1]},${`${12 + i} Avenue des Amis, ${paris[i]}`},'Paris',${48.82 + i * .006},${2.28 + i * .012},'A welcoming Paris destination where dogs are celebrated.','{water bowls,outdoor seating,dog treats}',${(4.4 + (i % 6) / 10).toFixed(1)},${venuePhotos[v[0]] || `https://images.unsplash.com/photo-1473445361085-b9a07f55608b?w=800&h=500&fit=crop`})`; }
+  for (const [name, image] of Object.entries(venuePhotos)) await sql`UPDATE venues SET image_url = ${image} WHERE name = ${name}`;
 }
 
 await seedProviders(); await seedBreeders(); await seedRescue(); await seedVenues();

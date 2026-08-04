@@ -433,7 +433,7 @@ function ConnectPage() {
                       >
                         {/* Banner */}
                         <div className="flex h-32 items-center justify-center bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-                          <img src={g.image_url ?? "https://placedog.net/500/300?random=group-fallback"} alt="" className="h-full w-full object-cover" onError={(e) => { e.currentTarget.src = "/logo-full.png"; }} />
+                          <img src={g.image_url || `https://images.unsplash.com/photo-1558788353-f76d92427f16?w=800&h=500&fit=crop&auto=format&sig=${g.id}`} alt={`${g.name} community`} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/logo-full.png"; }} />
                         </div>
 
                         {/* Content */}

@@ -468,6 +468,8 @@ export const getReferralCount = createServerFn({ method: "GET" })
 export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
   async () => {
     await createMatchTables();
+    // Seed discoverable dogs on first visit so Viral Paws is never blank.
+    await ensureDogProfilesSeeded();
 
     // Ensure subscriptions table exists
     await sql()`
@@ -515,7 +517,8 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
       }));
     }
 
-    // Fallback: return Plus dogs ordered by newest
+    // Fallback: keep Viral Paws useful before the first Plus subscriber exists.
+    // Profiles are public discovery content; Plus remains the feature/boost entitlement.
     const fallback = await sql()`
       SELECT
         dp.id,
@@ -530,9 +533,7 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
         dp.youtube,
         0 AS swipe_count
       FROM dog_profiles dp
-      INNER JOIN subscriptions sub ON dp.email = sub.email
-      WHERE sub.status = 'active'
-        AND dp.email IS NOT NULL
+      WHERE dp.email IS NULL OR dp.email IS NOT NULL
       ORDER BY dp.created_at DESC
       LIMIT 20
     `;

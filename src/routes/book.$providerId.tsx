@@ -1,5 +1,6 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { sql } from "../db";
 import { createBooking } from "../db/bookings";
@@ -81,6 +82,21 @@ function timeSlots() {
 
 import { seoHead, seoProvider } from "../lib/seo";
 
+const getProviderDetail = createServerFn({ method: "GET" })
+  .validator((data: unknown) => {
+    if (typeof data !== "object" || data === null || !("providerId" in data)) throw new Error("providerId is required");
+    return { providerId: Number((data as { providerId: string }).providerId) };
+  })
+  .handler(async ({ data }) => {
+    try {
+      await createBookingTables();
+      const [provider] = await sql()`SELECT id, name, category, description, location, image_url, rating, review_count FROM providers WHERE id = ${data.providerId}`;
+      if (!provider) return { provider: null, services: [], error: "Provider not found" };
+      const services = await sql()`SELECT id, name, description, price, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
+      return { provider: provider as Provider, services, error: null };
+    } catch { return { provider: null, services: [], error: "Database not connected" }; }
+  });
+
 export const Route = createFileRoute("/book/$providerId")({
   head: ({ loaderData }) => {
     const d = loaderData as { provider: { name: string; category: string } | null };
@@ -89,36 +105,7 @@ export const Route = createFileRoute("/book/$providerId")({
     }
     return seoHead({ title: "Provider — Pawls", description: "View dog service provider details on Pawls.", path: "/book" });
   },
-  loader: async ({ params }) => {
-    const providerId = Number(params.providerId);
-    if (isNaN(providerId)) {
-      return { provider: null, services: [], error: "Invalid provider ID" };
-    }
-
-    try {
-      await createBookingTables();
-      const [provider] = (await sql()`
-        SELECT id, name, category, description, location, image_url, rating, review_count
-        FROM providers
-        WHERE id = ${providerId}
-      `) as Provider[];
-
-      if (!provider) {
-        return { provider: null, services: [], error: "not_found" };
-      }
-
-      const services = (await sql()`
-        SELECT id, name, price_cents, duration_minutes
-        FROM services
-        WHERE provider_id = ${providerId}
-        ORDER BY price_cents ASC
-      `) as Service[];
-
-      return { provider, services, error: null };
-    } catch {
-      return { provider: null, services: [], error: "db_error" };
-    }
-  },
+  loader: ({ params }) => getProviderDetail({ data: { providerId: params.providerId } }),
   component: ProviderDetailPage,
 });
 
