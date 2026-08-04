@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# PRODUCTION BUILD HELPER (called only by go-live.sh; not a standalone deploy).
 # Produce a Vercel Build Output API bundle (.vercel/output) for this site, then
 # deploy it with:  bunx vercel deploy --prebuilt
 #

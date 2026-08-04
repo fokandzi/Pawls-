@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Publish this site live to Vercel and print the live URL.
+# PRODUCTION DEPLOY ENTRY POINT: deploys Pawls to Vercel (pawls.club).
+# This is the one production deploy script. It builds via build-vercel.sh, then
+# uploads the prebuilt Build Output bundle with the Vercel CLI.
 #
 # Contract:
 #   VERCEL_TOKEN   (required) — collected from the owner via the go-live flow.

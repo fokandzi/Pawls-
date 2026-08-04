@@ -1,4 +1,6 @@
-// Production server for the built site. The TanStack Start build emits a portable
+// PLATFORM-ONLY: runtime for the shared workspace server on port 3000.
+// This is not used by Vercel; go-live.sh deploys vercel-entry.ts instead.
+// The TanStack Start build emits a portable
 // fetch handler (dist/server/server.js) plus static client assets (dist/client);
 // this wraps them in a Bun server on port 3000 — static files first, SSR for the
 // rest. Run `bun run build` before starting. Restart it with `bun run publish`.

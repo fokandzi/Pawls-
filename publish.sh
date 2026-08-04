@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Rebuild the site and (re)start the production server on port 3000.
+# PLATFORM-ONLY: publishes the shared workspace server on port 3000.
+# This is not the Vercel production deployment path; use go-live.sh for Vercel.
 # Build runs in the foreground so errors surface; the server is launched in a new
 # session (setsid) so it keeps running after this script — and your shell — exits.
 # serve.ts frees the port (across user boundaries, retrying on races) before

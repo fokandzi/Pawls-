@@ -196,7 +196,7 @@ function Home() {
           <img
             src="/logo-full.png"
             alt="Pawls"
-            className="h-14 sm:h-20 md:h-24"
+            className="block h-40 w-40 object-contain sm:h-52 sm:w-52 md:h-60 md:w-60"
           />
         </Link>
 
