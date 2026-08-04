@@ -1,6 +1,8 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
+import { createBookingTables } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
 
 type Provider = {
@@ -61,20 +63,22 @@ function renderStars(rating: number) {
 
 import { seoHead, SEO } from "../lib/seo";
 
+const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
+  await createBookingTables();
+  try {
+    const rows = (await sql()`
+      SELECT id, name, category, description, location, image_url, rating, review_count
+      FROM providers ORDER BY rating DESC
+    `) as Provider[];
+    return { providers: rows, error: null };
+  } catch {
+    return { providers: null, error: "Database not connected" };
+  }
+});
+
 export const Route = createFileRoute("/book")({
   head: () => seoHead(SEO.book),
-  loader: async () => {
-    try {
-      const rows = (await sql()`
-        SELECT id, name, category, description, location, image_url, rating, review_count
-        FROM providers
-        ORDER BY rating DESC
-      `) as Provider[];
-      return { providers: rows, error: null };
-    } catch {
-      return { providers: null, error: "Database not connected" };
-    }
-  },
+  loader: () => loadProviders(),
   component: BookPage,
 });
 
@@ -140,8 +144,8 @@ function BookPage() {
                         className="group relative flex flex-col rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm transition-all duration-300 hover:border-amber-300 hover:shadow-md"
                       >
                         {/* Image placeholder */}
-                        <div className="mb-4 flex h-40 items-center justify-center rounded-xl bg-[var(--pawls-cream-50)]">
-                          <span className="text-5xl">{cfg.emoji}</span>
+                        <div className="mb-4 flex h-40 items-center justify-center overflow-hidden rounded-xl bg-[var(--pawls-cream-50)]">
+                          {provider.image_url ? <img src={provider.image_url} alt="" className="h-full w-full object-cover" onError={(e) => { e.currentTarget.src = "/logo-full.png"; }} /> : <span className="text-5xl">{cfg.emoji}</span>}
                         </div>
 
                         {/* Category badge + location */}

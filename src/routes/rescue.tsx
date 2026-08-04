@@ -63,13 +63,13 @@ type ShelterSeed = {
 
 const seedShelters: ShelterSeed[] = [
   {
-    name: "SPA de Paris",
-    location: "Paris 13e",
+    name: "Refuge Paris 5e Solidaire",
+    location: "Paris 5e",
     description:
-      "The Paris branch of the Société Protectrice des Animaux, France's oldest animal welfare organisation. We rescue, rehabilitate, and rehome hundreds of dogs every year from our modern facility in the 13th arrondissement.",
-    phone: "+33 1 43 89 76 00",
-    email: "adoption@spa-paris.fr",
-    website: "https://www.la-spa.fr/paris",
+      "Placeholder rescue profile for testing Pawls adoption flows. This fictional shelter record is used for demonstration purposes only.",
+    phone: "+33 00 000 00 05",
+    email: "adoptions@pawls.example",
+    website: "https://refuge-paris-5e.pawls.example",
     dogs: [
       {
         name: "Bella",
@@ -126,13 +126,13 @@ const seedShelters: ShelterSeed[] = [
     ],
   },
   {
-    name: "Refuge de Gennevilliers",
-    location: "Gennevilliers",
+    name: "Refuge Paris 6e Solidaire",
+    location: "Paris 6e",
     description:
-      "Refuge de Gennevilliers serves the northern suburbs of Paris, providing loving temporary care for abandoned and surrendered dogs. Our dedicated team works tirelessly to match each dog with the perfect home.",
-    phone: "+33 1 47 33 55 00",
-    email: "contact@refuge-gennevilliers.fr",
-    website: "https://www.refuge-gennevilliers.fr",
+      "Placeholder rescue profile for testing Pawls adoption flows. This fictional shelter record is used for demonstration purposes only.",
+    phone: "+33 00 000 00 06",
+    email: "adoptions@pawls.example",
+    website: "https://refuge-paris-6e.pawls.example",
     dogs: [
       {
         name: "Charlie",
@@ -239,13 +239,13 @@ const seedShelters: ShelterSeed[] = [
     ],
   },
   {
-    name: "Refuge de Thiais",
-    location: "Thiais",
+    name: "Refuge Paris 7e Solidaire",
+    location: "Paris 7e",
     description:
-      "Refuge de Thiais has been serving the southern Paris community for over 30 years. We provide shelter, veterinary care, and adoption services for dogs in need. Our knowledgeable staff offer post-adoption support to ensure successful matches.",
-    phone: "+33 1 46 87 83 00",
-    email: "contact@refuge-thiais.fr",
-    website: "https://www.refuge-thiais.fr",
+      "Placeholder rescue profile for testing Pawls adoption flows. This fictional shelter record is used for demonstration purposes only.",
+    phone: "+33 00 000 00 07",
+    email: "adoptions@pawls.example",
+    website: "https://refuge-paris-7e.pawls.example",
     dogs: [
       {
         name: "Finn",

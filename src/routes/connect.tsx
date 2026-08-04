@@ -40,6 +40,7 @@ type GroupSeed = {
   location: string;
   category: string;
   member_count: number;
+  image_url: string;
   events: {
     title: string;
     description: string;
@@ -47,6 +48,7 @@ type GroupSeed = {
     event_date: string;
     start_time: string;
     attendee_count: number;
+    image_url: string;
   }[];
 };
 
@@ -58,6 +60,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "social",
     member_count: 234,
+    image_url: "https://placedog.net/500/300?random=group-0",
     events: [
       {
         title: "Bois de Vincennes Sunday Stroll",
@@ -67,6 +70,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-02",
         start_time: "10:00",
         attendee_count: 34,
+        image_url: "https://placedog.net/500/300?random=event-0",
       },
       {
         title: "Seine-Side Doggy Apéro",
@@ -76,6 +80,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-15",
         start_time: "18:00",
         attendee_count: 22,
+        image_url: "https://placedog.net/500/300?random=event-1",
       },
     ],
   },
@@ -86,6 +91,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "playgroup",
     member_count: 156,
+    image_url: "https://placedog.net/500/300?random=group-1",
     events: [
       {
         title: "Puppy Socialisation Hour",
@@ -95,6 +101,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-01",
         start_time: "09:30",
         attendee_count: 12,
+        image_url: "https://placedog.net/500/300?random=event-2",
       },
     ],
   },
@@ -105,6 +112,7 @@ const seedGroups: GroupSeed[] = [
     location: "Île-de-France",
     category: "outdoor",
     member_count: 189,
+    image_url: "https://placedog.net/500/300?random=group-2",
     events: [
       {
         title: "Fontainebleau Forest Trail",
@@ -114,6 +122,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-08",
         start_time: "08:00",
         attendee_count: 28,
+        image_url: "https://placedog.net/500/300?random=event-3",
       },
     ],
   },
@@ -124,6 +133,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "breed-specific",
     member_count: 98,
+    image_url: "https://placedog.net/500/300?random=group-3",
     events: [
       {
         title: "Corgi Coffee Morning",
@@ -133,6 +143,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-05",
         start_time: "10:30",
         attendee_count: 16,
+        image_url: "https://placedog.net/500/300?random=event-4",
       },
     ],
   },
@@ -143,6 +154,7 @@ const seedGroups: GroupSeed[] = [
     location: "Multiple locations",
     category: "sport",
     member_count: 312,
+    image_url: "https://placedog.net/500/300?random=group-4",
     events: [
       {
         title: "Beginner Agility Workshop",
@@ -152,6 +164,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-09",
         start_time: "13:00",
         attendee_count: 20,
+        image_url: "https://placedog.net/500/300?random=event-5",
       },
       {
         title: "Summer Agility Competition",
@@ -161,6 +174,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-22",
         start_time: "09:00",
         attendee_count: 45,
+        image_url: "https://placedog.net/500/300?random=event-6",
       },
     ],
   },
@@ -171,6 +185,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "walking",
     member_count: 145,
+    image_url: "https://placedog.net/500/300?random=group-5",
     events: [
       {
         title: "Sunset Shoot at Buttes-Chaumont",
@@ -180,6 +195,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-03",
         start_time: "19:30",
         attendee_count: 19,
+        image_url: "https://placedog.net/500/300?random=event-7",
       },
     ],
   },
@@ -190,6 +206,7 @@ const seedGroups: GroupSeed[] = [
     location: "Île-de-France",
     category: "breed-specific",
     member_count: 67,
+    image_url: "https://placedog.net/500/300?random=group-6",
     events: [
       {
         title: "Berner Walk & BBQ",
@@ -199,6 +216,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-16",
         start_time: "11:00",
         attendee_count: 31,
+        image_url: "https://placedog.net/500/300?random=event-8",
       },
     ],
   },
@@ -209,6 +227,7 @@ const seedGroups: GroupSeed[] = [
     location: "Multiple locations",
     category: "support",
     member_count: 423,
+    image_url: "https://placedog.net/500/300?random=group-7",
     events: [
       {
         title: "Reactive Dog Pack Walk",
@@ -218,6 +237,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-07",
         start_time: "09:00",
         attendee_count: 10,
+        image_url: "https://placedog.net/500/300?random=event-9",
       },
       {
         title: "Rescue Dog Picnic",
@@ -227,6 +247,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-20",
         start_time: "12:00",
         attendee_count: 25,
+        image_url: "https://placedog.net/500/300?random=event-10",
       },
     ],
   },
@@ -254,15 +275,15 @@ const getConnectData = createServerFn({ method: "POST" }).handler(async () => {
   if (Number(groupCount.count) === 0) {
     for (const g of seedGroups) {
       const [group] = await sql()`
-        INSERT INTO connect_groups (name, description, location, category, member_count)
-        VALUES (${g.name}, ${g.description}, ${g.location}, ${g.category}, ${g.member_count})
+        INSERT INTO connect_groups (name, description, location, category, member_count, image_url)
+        VALUES (${g.name}, ${g.description}, ${g.location}, ${g.category}, ${g.member_count}, ${g.image_url})
         RETURNING id
       `;
       if (group) {
         for (const e of g.events) {
           await sql()`
-            INSERT INTO events (group_id, title, description, location, event_date, start_time, attendee_count)
-            VALUES (${group.id}, ${e.title}, ${e.description}, ${e.location}, ${e.event_date}, ${e.start_time}, ${e.attendee_count})
+            INSERT INTO events (group_id, title, description, location, event_date, start_time, attendee_count, image_url)
+            VALUES (${group.id}, ${e.title}, ${e.description}, ${e.location}, ${e.event_date}, ${e.start_time}, ${e.attendee_count}, ${e.image_url})
           `;
         }
       }
@@ -398,7 +419,7 @@ function ConnectPage() {
                       >
                         {/* Banner */}
                         <div className="flex h-32 items-center justify-center bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-                          <span className="text-5xl">{cat.emoji}</span>
+                          <img src={g.image_url ?? "https://placedog.net/500/300?random=group-fallback"} alt="" className="h-full w-full object-cover" onError={(e) => { e.currentTarget.src = "/logo-full.png"; }} />
                         </div>
 
                         {/* Content */}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { sql } from "../db";
 import { createBooking } from "../db/bookings";
 import { createCheckoutSession } from "../db/payments";
+import { createBookingTables } from "../db/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,7 @@ export const Route = createFileRoute("/book/$providerId")({
     }
 
     try {
+      await createBookingTables();
       const [provider] = (await sql()`
         SELECT id, name, category, description, location, image_url, rating, review_count
         FROM providers
@@ -263,8 +265,8 @@ function ProviderDetailPage() {
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-10 pt-4">
         <div className="mx-auto max-w-3xl">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-[var(--pawls-cream-100)] text-5xl shadow-sm">
-              {cfg.emoji}
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--pawls-cream-100)] text-5xl shadow-sm">
+              {provider.image_url ? <img src={provider.image_url} alt="" className="h-full w-full object-cover" onError={(e) => { e.currentTarget.src = "/logo-full.png"; }} /> : cfg.emoji}
             </div>
             <div className="flex-1">
               <div className="mb-2 flex flex-wrap items-center gap-2">
