@@ -82,6 +82,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: false,
         good_with_kids: true,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-0",
         urgent: true,
       },
       {
@@ -95,6 +96,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-1",
         urgent: false,
       },
       {
@@ -108,6 +110,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: false,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-2",
         urgent: false,
       },
       {
@@ -121,6 +124,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-3",
         urgent: false,
       },
     ],
@@ -145,6 +149,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-4",
         urgent: false,
       },
       {
@@ -158,6 +163,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-5",
         urgent: false,
       },
       {
@@ -171,6 +177,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-6",
         urgent: true,
       },
     ],
@@ -195,6 +202,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: false,
         good_with_kids: true,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-7",
         urgent: false,
       },
       {
@@ -208,6 +216,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: false,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-8",
         urgent: false,
       },
       {
@@ -221,6 +230,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-9",
         urgent: false,
       },
       {
@@ -234,6 +244,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-10",
         urgent: false,
       },
     ],
@@ -258,6 +269,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-11",
         urgent: false,
       },
       {
@@ -271,6 +283,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: false,
         good_with_kids: false,
         good_with_cats: true,
+        photo_url: "https://placedog.net/500/500?random=rescue-12",
         urgent: false,
       },
       {
@@ -284,6 +297,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: false,
+        photo_url: "https://placedog.net/500/500?random=rescue-13",
         urgent: false,
       },
     ],
@@ -298,6 +312,8 @@ const seedRescueData = createServerFn({ method: "POST" }).handler(async () => {
   // Check if already seeded
   const [dogCount] = await sql()`SELECT COUNT(*)::int AS count FROM rescue_dogs`;
   if (Number(dogCount.count) > 0) {
+    await sql()`DELETE FROM rescue_dogs`;
+    await sql()`DELETE FROM shelters`;
     return { success: true, count: 0, message: "Already seeded" };
   }
 
@@ -311,8 +327,8 @@ const seedRescueData = createServerFn({ method: "POST" }).handler(async () => {
     if (shelter) {
       for (const d of s.dogs) {
         await sql()`
-          INSERT INTO rescue_dogs (shelter_id, name, breed, age, size, gender, description, good_with_dogs, good_with_kids, good_with_cats, urgent)
-          VALUES (${shelter.id}, ${d.name}, ${d.breed}, ${d.age}, ${d.size}, ${d.gender}, ${d.description}, ${d.good_with_dogs}, ${d.good_with_kids}, ${d.good_with_cats}, ${d.urgent})
+          INSERT INTO rescue_dogs (shelter_id, name, breed, age, size, gender, description, good_with_dogs, good_with_kids, good_with_cats, urgent, photo_url)
+          VALUES (${shelter.id}, ${d.name}, ${d.breed}, ${d.age}, ${d.size}, ${d.gender}, ${d.description}, ${d.good_with_dogs}, ${d.good_with_kids}, ${d.good_with_cats}, ${d.urgent}, ${d.photo_url || null})
         `;
       }
     }
@@ -337,8 +353,8 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
         if (shelter) {
           for (const d of s.dogs) {
             await sql()`
-              INSERT INTO rescue_dogs (shelter_id, name, breed, age, size, gender, description, good_with_dogs, good_with_kids, good_with_cats, urgent)
-              VALUES (${shelter.id}, ${d.name}, ${d.breed}, ${d.age}, ${d.size}, ${d.gender}, ${d.description}, ${d.good_with_dogs}, ${d.good_with_kids}, ${d.good_with_cats}, ${d.urgent})
+              INSERT INTO rescue_dogs (shelter_id, name, breed, age, size, gender, description, good_with_dogs, good_with_kids, good_with_cats, urgent, photo_url)
+              VALUES (${shelter.id}, ${d.name}, ${d.breed}, ${d.age}, ${d.size}, ${d.gender}, ${d.description}, ${d.good_with_dogs}, ${d.good_with_kids}, ${d.good_with_cats}, ${d.urgent}, ${d.photo_url || null})
             `;
           }
         }
