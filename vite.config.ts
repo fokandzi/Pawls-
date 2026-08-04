@@ -12,6 +12,21 @@ export default defineConfig({
     host: true,
     allowedHosts: true,
   },
+  build: {
+    // Keep the client and SSR Rollup graphs from forming one large chunk.
+    // This is especially important in the low-memory deployment sandbox.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("@tanstack")) return "tanstack";
+          if (id.includes("react")) return "react";
+          if (id.includes("stripe")) return "stripe";
+          return "vendor";
+        },
+      },
+    },
+  },
   plugins: [
     tailwindcss(),
     tsConfigPaths({
