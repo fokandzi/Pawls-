@@ -1,0 +1,4 @@
+.pawls-icon { width: 24px; height: 24px; display:inline-block; flex:none; color:var(--icon-color,var(--pawls-ink-600)); }
+.pawls-icon--active { --icon-color: var(--pawls-terracotta-500); }
+.pawls-icon--success { --icon-color: var(--pawls-moss-500); }
+.pawls-icon--gold { --icon-color: var(--pawls-gold-500); }

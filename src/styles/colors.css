@@ -1,0 +1,33 @@
+:root {
+  /* Pawls palette — warm, optimistic, accessible */
+  --pawls-cream-50: #FFF9F2;
+  --pawls-cream-100: #FFF1E3;
+  --pawls-cream-200: #F9E3D0;
+  --pawls-cream-300: #F0CFB4;
+  --pawls-terracotta-400: #D86F52;
+  --pawls-terracotta-500: #C95D43;
+  --pawls-terracotta-600: #AD4934;
+  --pawls-terracotta-700: #883A2B;
+  --pawls-moss-400: #8EA56A;
+  --pawls-moss-500: #718B50;
+  --pawls-moss-600: #58723D;
+  --pawls-moss-700: #40582F;
+  --pawls-gold-300: #F5D486;
+  --pawls-gold-400: #EABD5A;
+  --pawls-gold-500: #D9A33D;
+  --pawls-ink-900: #2D2926;
+  --pawls-ink-700: #514A45;
+  --pawls-ink-600: #6B625B;
+  --pawls-ink-500: #81766D;
+  --pawls-gray-400: #B9B0A9;
+  --pawls-gray-300: #D9D2CC;
+  --pawls-gray-200: #E9E3DE;
+  --pawls-gray-100: #F3EFEB;
+  --pawls-white: #FFFFFF;
+  --pawls-error: #C84C4C;
+  --pawls-error-bg: #FCEAEA;
+  --pawls-success: #58723D;
+  --pawls-focus: #D9A33D;
+  --pawls-gradient-plus: linear-gradient(135deg, #F5D486 0%, #EABD5A 48%, #D86F52 100%);
+  --pawls-gradient-warm: linear-gradient(135deg, #FFF1E3 0%, #FFF9F2 100%);
+}

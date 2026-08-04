@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "./colors.css";
+@import "./typography.css";
+@import "./tokens.css";
+@import "./icons/icons.css";
+
+@layer base {
+  html, body {
+    background: var(--pawls-cream-50);
+    color: var(--pawls-ink-900);
+    font-family: var(--font-body);
+    @apply antialiased;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  button, a, input, select, textarea { font-family: var(--font-body); }
+}
+
+/* Prevent images and other content from breaking out */
+img, video, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent horizontal overflow from any element */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

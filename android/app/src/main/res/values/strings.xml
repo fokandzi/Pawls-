@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pawnder</string>
+    <string name="title_activity_main">Pawnder</string>
+    <string name="package_name">com.pawnder.app</string>
+    <string name="custom_url_scheme">com.pawnder.app</string>
+</resources>

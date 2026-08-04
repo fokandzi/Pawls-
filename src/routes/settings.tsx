@@ -1,0 +1,10 @@
+import { AppHeader, AppFooter } from "../lib/app-header";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { deleteAccount } from "../db/schema";
+export const Route = createFileRoute("/settings")({ component: SettingsPage });
+function SettingsPage() {
+  const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
+  const remove=async()=>{ if(!window.confirm("Delete your Pawls account and dog profile? This cannot be undone.")) return; setBusy(true); const profileId=Number(localStorage.getItem("pawnder-profile-id")); const email=localStorage.getItem("userEmail"); const result=await deleteAccount({data:{profileId:Number.isFinite(profileId)?profileId:null,email}}); if(result.success){localStorage.clear();setMessage("Your account has been deleted.");}else setMessage(result.error||"Unable to delete account.");setBusy(false); };
+  return <div className="flex min-h-dvh flex-col"><AppHeader active="settings"/><main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-16"><div className="mx-auto max-w-2xl"><h1 className="text-3xl font-extrabold text-gray-900">Settings</h1><p className="mt-2 text-gray-600">Manage your Pawls account and privacy.</p><section className="mt-10 rounded-2xl border border-red-100 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold text-gray-900">Delete Account</h2><p className="mt-2 text-sm leading-relaxed text-gray-600">Permanently delete your account, dog profiles, matches, messages, swipes, referrals and subscription records. This action cannot be undone.</p><button onClick={remove} disabled={busy} className="mt-5 rounded-full bg-red-600 px-5 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60">{busy?"Deleting…":"Delete Account"}</button>{message&&<p className="mt-4 text-sm font-medium text-gray-700">{message}</p>}</section><Link to="/privacy" className="mt-6 inline-block text-sm text-[var(--pawls-terracotta-500)] underline">Read our Privacy Policy</Link></div></main><AppFooter/></div>;
+}
