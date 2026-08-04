@@ -307,6 +307,18 @@ const getConnectData = createServerFn({ method: "POST" }).handler(async () => {
   return { groups, events };
 });
 
+const joinEvent = createServerFn({ method: "POST" })
+  .validator((data: { eventId: number }) => data)
+  .handler(async ({ data }) => {
+    await createConnectTables();
+    const [event] = await sql()`
+      UPDATE events SET attendee_count = attendee_count + 1
+      WHERE id = ${data.eventId}
+      RETURNING attendee_count
+    `;
+    return event ? { success: true, attendeeCount: event.attendee_count } : { success: false };
+  });
+
 // ── Route definition ─────────────────────────────────────────────────────────
 
 import { seoHead, SEO } from "../lib/seo";
@@ -346,6 +358,8 @@ function ConnectPage() {
   const isExactConnect = routerState.location.pathname === "/connect";
 
   const [activeTab, setActiveTab] = useState<"groups" | "events">("groups");
+  const [joinedEvents, setJoinedEvents] = useState<Set<number>>(new Set());
+  const [joiningEvent, setJoiningEvent] = useState<number | null>(null);
 
   // Handle loading/error states at render
   const groups: Group[] = (data as any)?.groups ?? [];
@@ -537,8 +551,21 @@ function ConnectPage() {
 
                           {/* CTA */}
                           <div className="shrink-0">
-                            <button className="rounded-full bg-[var(--pawls-terracotta-500)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-                              Join Event
+                            <button
+                              type="button"
+                              disabled={joiningEvent === ev.id || joinedEvents.has(ev.id)}
+                              onClick={async () => {
+                                setJoiningEvent(ev.id);
+                                try {
+                                  const result = await joinEvent({ data: { eventId: ev.id } });
+                                  if (result.success) setJoinedEvents((current) => new Set(current).add(ev.id));
+                                } finally {
+                                  setJoiningEvent(null);
+                                }
+                              }}
+                              className={`rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors ${joinedEvents.has(ev.id) ? "bg-emerald-600" : "bg-[var(--pawls-terracotta-500)] hover:bg-[var(--pawls-terracotta-700)]"} disabled:cursor-not-allowed disabled:opacity-70`}
+                            >
+                              {joinedEvents.has(ev.id) ? "Joined ✓" : joiningEvent === ev.id ? "Joining…" : "Join Event"}
                             </button>
                           </div>
                         </div>

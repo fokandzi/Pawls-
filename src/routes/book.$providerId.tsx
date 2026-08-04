@@ -208,18 +208,17 @@ function ProviderDetailPage() {
 
   // ── Error states ───────────────────────────────────────────────────────────
 
-  if (error === "db_error" || error === "Invalid provider ID") {
+  if (error === "db_error") {
     return (
       <section className="flex flex-1 items-center justify-center bg-white px-6 py-20">
         <div className="flex flex-col items-center rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 px-6 py-20 text-center">
-          <span className="text-5xl"></span>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Coming soon</h2>
-          <p className="mt-2 max-w-md text-gray-600">
-            Our booking marketplace is being set up. Check back soon to browse and book trusted dog service providers.
-          </p>
-          <Link to="/book" className="mt-6 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-            ← Back to all providers
-          </Link>
+          <span className="text-5xl">⚠️</span>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">Couldn’t load this provider</h2>
+          <p className="mt-2 max-w-md text-gray-600">We had trouble loading the booking details. Please try again.</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-6 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
+            Retry
+          </button>
+          <Link to="/book" className="mt-3 text-sm font-medium text-gray-500 hover:text-[var(--pawls-terracotta-500)]">← Back to all providers</Link>
         </div>
       </section>
     );

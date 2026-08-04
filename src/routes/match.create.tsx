@@ -95,8 +95,14 @@ function CreateProfilePage() {
             localStorage.setItem("pawnder-email", form.email);
             localStorage.setItem("userEmail", form.email);
           }
+
+          // Use a full-page fallback after persisting the profile. This is more
+          // reliable than the router after an async server-function request.
+          router.navigate({ to: "/match" });
+          window.location.href = "/match";
         }
-        router.navigate({ to: "/match" });
+      } else {
+        setError("Failed to create profile. Please try again.");
       }
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please try again.");

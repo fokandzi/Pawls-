@@ -13,8 +13,22 @@ async function seedProviders() {
   const names = ["Balades Belleville", "Pattes de Montmartre", "Le Spa des Toutous", "Moustaches & Compagnie", "Canis Major Training", "Clinique Vétérinaire Bastille", "Les Promenades du Canal", "Salon Toutou Chic", "Garde Douce Paris", "Éduca’Chien", "Veto République", "Au Poil Près"];
   const cats = ["walker", "walker", "groomer", "sitter", "trainer", "vet", "walker", "groomer", "sitter", "trainer", "vet", "groomer"];
   const services = [["Walk 30 min",1800,30],["Adventure walk 60 min",3000,60],["Wash & blow-dry",4200,60],["Daycare",3500,480],["Positive training",6500,60],["Wellness check-up",5500,30],["Pack walk 60 min",2400,60],["Full groom",7500,100],["Overnight stay",4800,1440],["Puppy class",28000,360],["Vaccination visit",4000,20],["Nail trim & tidy",2200,30]] as const;
+  const providerImages = [
+    "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1552053831-71594a27632d?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1552053831-71594a27632d?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600&h=400&fit=crop",
+    "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=600&h=400&fit=crop",
+  ] as const;
   if (Number(count.count) < 10) for (let i = Number(count.count); i < names.length; i++) {
-    const [p] = await sql`INSERT INTO providers (name,category,description,location,image_url,rating,review_count) VALUES (${names[i]},${cats[i]},${`Trusted Paris dog care from a local ${cats[i]} specialist. Gentle, reliable and fully focused on your dog's wellbeing.`},${paris[i]},${`https://placedog.net/600/400?random=provider-${i}`},${(4.3 + (i % 7) / 10).toFixed(1)},${42 + i * 13}) RETURNING id`;
+    const [p] = await sql`INSERT INTO providers (name,category,description,location,image_url,rating,review_count) VALUES (${names[i]},${cats[i]},${`Trusted Paris dog care from a local ${cats[i]} specialist. Gentle, reliable and fully focused on your dog's wellbeing.`},${paris[i]},${providerImages[i]},${(4.3 + (i % 7) / 10).toFixed(1)},${42 + i * 13}) RETURNING id`;
     const s = services[i];
     await sql`INSERT INTO services (provider_id,name,price_cents,duration_minutes) VALUES (${p.id},${s[0]},${s[1]},${s[2]})`;
   }
