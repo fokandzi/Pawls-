@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { createMembershipCheckout } from "../db/payments";
@@ -98,7 +97,6 @@ function MembershipPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="breed" />
 
       <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
         {/* Hero */}
@@ -204,7 +202,6 @@ function MembershipPage() {
       </main>
 
       {/* Footer */}
-      <AppFooter />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
@@ -134,7 +133,6 @@ function RescueDogDetailPage() {
   if (error || !dog) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <AppHeader active="rescue" />
 
         <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
           <div className="max-w-sm text-center">
@@ -155,8 +153,6 @@ function RescueDogDetailPage() {
             </Link>
           </div>
         </section>
-
-        <AppFooter />
       </div>
     );
   }
@@ -172,7 +168,6 @@ function RescueDogDetailPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="rescue" />
 
       {/* Back link */}
       <div className="bg-white px-6 pt-6">
@@ -352,7 +347,6 @@ function RescueDogDetailPage() {
       </section>
 
       {/* Footer */}
-      <AppFooter />
     </div>
   );
 }

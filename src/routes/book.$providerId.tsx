@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -237,7 +236,6 @@ function ProviderDetailPage() {
 
   return (
     <>
-      <AppHeader active="book" />
       {/* Back link */}
       <div className="bg-[var(--pawls-cream-50)] px-6 py-4">
         <div className="mx-auto max-w-3xl">
@@ -379,7 +377,6 @@ function ProviderDetailPage() {
           </div>
         </div>
       )}
-      <AppFooter />
     </>
   );
 }

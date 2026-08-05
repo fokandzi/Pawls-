@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -118,7 +117,6 @@ function CreateProfilePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="match" />
 
       {/* Form */}
       <section className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-12">
@@ -366,7 +364,6 @@ function CreateProfilePage() {
       </section>
 
       {/* Footer */}
-      <AppFooter />
     </div>
   );
 }

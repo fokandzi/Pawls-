@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
@@ -179,7 +178,6 @@ function BreederRegisterPage() {
   if (result) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <AppHeader active="breed" />
 
         <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
           <section className="mx-auto max-w-2xl px-6 py-16 text-center">
@@ -272,8 +270,6 @@ function BreederRegisterPage() {
             </div>
           </section>
         </main>
-
-        <AppFooter />
       </div>
     );
   }
@@ -281,7 +277,6 @@ function BreederRegisterPage() {
   // ── Registration form view ───────────────────────────────────────────
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader active="breed" />
 
       <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
         <section className="mx-auto max-w-2xl px-6 py-12">
@@ -489,8 +484,6 @@ function BreederRegisterPage() {
           </div>
         </section>
       </main>
-
-      <AppFooter />
     </div>
   );
 }

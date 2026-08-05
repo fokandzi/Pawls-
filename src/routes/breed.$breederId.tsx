@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
@@ -121,7 +120,6 @@ function BreederDetailPage() {
   if (error && !breeder) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <AppHeader active="breed" />
         <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
           <div className="max-w-sm text-center">
             <span className="text-5xl"></span>
@@ -139,7 +137,6 @@ function BreederDetailPage() {
   if (!breeder) {
     return (
       <div className="flex min-h-dvh flex-col">
-        <AppHeader active="breed" />
         <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
           <div className="max-w-sm text-center">
             <span className="text-5xl"></span>
@@ -160,7 +157,6 @@ function BreederDetailPage() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader active="breed" />
 
       {/* Membership upgrade confirmation banner */}
       {upgraded && (
@@ -309,8 +305,6 @@ function BreederDetailPage() {
           </div>
         </div>
       </main>
-
-      <AppFooter />
     </div>
   );
 }
