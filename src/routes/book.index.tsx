@@ -129,11 +129,10 @@ function BookPage() {
                     };
 
                     return (
-                      <a
+                      <span
                         key={provider.id}
-                        href={`/book/${provider.id}`}
-                        rel="external"
-                        className="group relative flex flex-col rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm transition-all duration-300 hover:border-amber-300 hover:shadow-md"
+                        onClick={() => { window.location.href = `/book/${provider.id}`; }}
+                        className="group relative flex cursor-pointer flex-col rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm transition-all duration-300 hover:border-amber-300 hover:shadow-md"
                       >
                         {/* Image placeholder */}
                         <div className="mb-4 flex h-40 items-center justify-center overflow-hidden rounded-xl bg-[var(--pawls-cream-50)]">
@@ -179,7 +178,7 @@ function BookPage() {
                         <div className="mt-4 flex items-center gap-1 text-sm font-medium text-[var(--pawls-terracotta-500)] opacity-0 transition-opacity group-hover:opacity-100">
                           View services →
                         </div>
-                      </a>
+                      </span>
                     );
                   })}
                 </div>
