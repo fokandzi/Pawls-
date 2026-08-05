@@ -81,10 +81,12 @@ function timeSlots() {
 
 import { seoHead, seoProvider } from "../lib/seo";
 
-const getProviderDetail = createServerFn({ method: "GET" })
+const getProviderDetail = createServerFn({ method: "POST" })
   .validator((data: unknown) => {
     if (typeof data !== "object" || data === null || !("providerId" in data)) throw new Error("providerId is required");
-    return { providerId: Number((data as { providerId: string }).providerId) };
+    const providerId = Number((data as { providerId: unknown }).providerId);
+    if (!Number.isInteger(providerId) || providerId < 1) throw new Error("providerId must be a positive integer");
+    return { providerId };
   })
   .handler(async ({ data }) => {
     try {
