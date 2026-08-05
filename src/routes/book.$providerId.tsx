@@ -93,7 +93,7 @@ const getProviderDetail = createServerFn({ method: "GET" })
       await createBookingTables();
       const [provider] = await sql()`SELECT id, name, category, description, location, image_url, rating, review_count FROM providers WHERE id = ${data.providerId}`;
       if (!provider) return { provider: null, services: [], error: "Provider not found" };
-      const services = await sql()`SELECT id, name, description, price, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
+      const services = await sql()`SELECT id, name, price_cents, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
       return { provider: provider as Provider, services, error: null };
     } catch { return { provider: null, services: [], error: "Database not connected" }; }
   });
@@ -212,7 +212,7 @@ function ProviderDetailPage() {
     );
   }
 
-  if (error === "not_found" || !provider) {
+  if (error === "Provider not found" || !provider) {
     return (
       <section className="flex flex-1 items-center justify-center bg-white px-6 py-20">
         <div className="flex flex-col items-center rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 px-6 py-20 text-center">
