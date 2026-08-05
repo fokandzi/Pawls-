@@ -1,5 +1,5 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createBookingTables } from "../db/schema";
@@ -84,7 +84,6 @@ export const Route = createFileRoute("/book/")({
 
 function BookPage() {
   const { providers, error } = Route.useLoaderData();
-  const navigate = useNavigate();
   return (
     <>
           {/* Hero strip */}
@@ -130,20 +129,9 @@ function BookPage() {
                     };
 
                     return (
-                      <Link
+                      <a
                         key={provider.id}
-                        to="/book/$providerId"
-                        params={{ providerId: String(provider.id) }}
-                        onClick={(event) => {
-                          // Keep this explicit fallback for nested dynamic routes:
-                          // it ensures navigation even if Link's delegated handler
-                          // is unavailable during a delayed hydration pass.
-                          event.preventDefault();
-                          void navigate({
-                            to: "/book/$providerId",
-                            params: { providerId: String(provider.id) },
-                          });
-                        }}
+                        href={`/book/${provider.id}`}
                         className="group relative flex flex-col rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm transition-all duration-300 hover:border-amber-300 hover:shadow-md"
                       >
                         {/* Image placeholder */}
