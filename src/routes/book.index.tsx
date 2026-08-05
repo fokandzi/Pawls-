@@ -132,6 +132,7 @@ function BookPage() {
                       <a
                         key={provider.id}
                         href={`/book/${provider.id}`}
+                        rel="external"
                         className="group relative flex flex-col rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm transition-all duration-300 hover:border-amber-300 hover:shadow-md"
                       >
                         {/* Image placeholder */}
