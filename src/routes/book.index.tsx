@@ -178,7 +178,7 @@ function BookPage() {
                         <div className="mt-4 flex items-center gap-1 text-sm font-medium text-[var(--pawls-terracotta-500)] opacity-0 transition-opacity group-hover:opacity-100">
                           View services →
                         </div>
-                      </Link>
+                      </a>
                     );
                   })}
                 </div>
