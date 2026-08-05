@@ -81,7 +81,7 @@ function timeSlots() {
 
 import { seoHead, seoProvider } from "../lib/seo";
 
-const getProviderDetail = createServerFn({ method: "POST" })
+const getProviderDetail = createServerFn({ method: "GET" })
   .validator((data: unknown) => {
     if (typeof data !== "object" || data === null || !("providerId" in data)) throw new Error("providerId is required");
     const providerId = Number((data as { providerId: unknown }).providerId);
