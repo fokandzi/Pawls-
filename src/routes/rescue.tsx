@@ -82,7 +82,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: false,
         good_with_kids: true,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-0",
+        photo_url: "https://placedog.net/500/500?id=0",
         urgent: true,
       },
       {
@@ -96,7 +96,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-1",
+        photo_url: "https://placedog.net/500/500?id=1",
         urgent: false,
       },
       {
@@ -110,7 +110,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: false,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-2",
+        photo_url: "https://placedog.net/500/500?id=2",
         urgent: false,
       },
       {
@@ -124,7 +124,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-3",
+        photo_url: "https://placedog.net/500/500?id=3",
         urgent: false,
       },
     ],
@@ -149,7 +149,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-4",
+        photo_url: "https://placedog.net/500/500?id=4",
         urgent: false,
       },
       {
@@ -163,7 +163,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-5",
+        photo_url: "https://placedog.net/500/500?id=5",
         urgent: false,
       },
       {
@@ -177,7 +177,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-6",
+        photo_url: "https://placedog.net/500/500?id=6",
         urgent: true,
       },
     ],
@@ -202,7 +202,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: false,
         good_with_kids: true,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-7",
+        photo_url: "https://placedog.net/500/500?id=7",
         urgent: false,
       },
       {
@@ -216,7 +216,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: false,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-8",
+        photo_url: "https://placedog.net/500/500?id=8",
         urgent: false,
       },
       {
@@ -230,7 +230,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-9",
+        photo_url: "https://placedog.net/500/500?id=9",
         urgent: false,
       },
       {
@@ -244,7 +244,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-10",
+        photo_url: "https://placedog.net/500/500?id=10",
         urgent: false,
       },
     ],
@@ -269,7 +269,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-11",
+        photo_url: "https://placedog.net/500/500?id=11",
         urgent: false,
       },
       {
@@ -283,7 +283,7 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: false,
         good_with_kids: false,
         good_with_cats: true,
-        photo_url: "https://placedog.net/500/500?random=rescue-12",
+        photo_url: "https://placedog.net/500/500?id=12",
         urgent: false,
       },
       {
@@ -297,12 +297,53 @@ const seedShelters: ShelterSeed[] = [
         good_with_dogs: true,
         good_with_kids: true,
         good_with_cats: false,
-        photo_url: "https://placedog.net/500/500?random=rescue-13",
+        photo_url: "https://placedog.net/500/500?id=13",
         urgent: false,
       },
     ],
   },
 ];
+
+// ── Static fallback data ─────────────────────────────────────────────────────
+// Deterministic listing/detail fallback used when the database is unreachable
+// (e.g. Vercel SSR cold start). Photo URLs use placedog.net?id=N so a dog
+// always shows the same photo on the listing and the detail page.
+export type StaticRescueDog = RescueDog & {
+  shelter_description: string;
+  shelter_website: string | null;
+};
+
+export function staticRescueDogs(): StaticRescueDog[] {
+  const dogs: StaticRescueDog[] = [];
+  let dogId = 1;
+  seedShelters.forEach((s, shelterIdx) => {
+    s.dogs.forEach((d) => {
+      dogs.push({
+        id: dogId,
+        shelter_id: shelterIdx + 1,
+        name: d.name,
+        breed: d.breed,
+        age: d.age,
+        size: d.size,
+        gender: d.gender,
+        description: d.description,
+        good_with_dogs: d.good_with_dogs,
+        good_with_kids: d.good_with_kids,
+        good_with_cats: d.good_with_cats,
+        photo_url: `https://placedog.net/500/500?id=${dogId - 1}`,
+        urgent: d.urgent,
+        shelter_name: s.name,
+        shelter_location: s.location,
+        shelter_email: s.email,
+        shelter_phone: s.phone,
+        shelter_description: s.description,
+        shelter_website: s.website,
+      });
+      dogId += 1;
+    });
+  });
+  return dogs;
+}
 
 // ── Server functions ─────────────────────────────────────────────────────────
 
@@ -373,9 +414,14 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
       ORDER BY d.urgent DESC, d.created_at DESC
     `;
 
+    // Fall back to deterministic static data when the DB is unreachable or empty.
+    if (!rows || rows.length === 0) {
+      return { dogs: staticRescueDogs() as unknown as RescueDog[], error: null };
+    }
+
     return { dogs: rows as RescueDog[], error: null };
   } catch {
-    return { dogs: null, error: "Database not connected" };
+    return { dogs: staticRescueDogs() as unknown as RescueDog[], error: null };
   }
 });
 
@@ -590,10 +636,11 @@ function RescuePage() {
                       {filteredDogs.map((dog) => {
                         const szCfg = sizeBadge[dog.size] ?? sizeBadge.medium;
                         return (
-                          <Link
+                          <a
                             key={dog.id}
-                            to="/rescue/$dogId"
-                            params={{ dogId: String(dog.id) }}
+                            href={`/rescue/${dog.id}`}
+                            target="_self"
+                            rel="external"
                             className="group relative overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-sm transition-all hover:border-[var(--pawls-cream-200)] hover:shadow-md"
                           >
                             {/* Urgent banner */}
@@ -605,10 +652,10 @@ function RescuePage() {
                               </div>
                             )}
 
-                            {/* Photo */}
+                            {/* Photo — same deterministic placedog URL as the detail page */}
                             <div className="relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
                               <img
-                                src={`/dogs/${dog.name.toLowerCase()}.jpg`}
+                                src={dog.photo_url ?? `/dogs/${dog.name.toLowerCase()}.jpg`}
                                 alt={dog.name}
                                 className="h-full w-full object-cover"
                                 onError={(e) => {
@@ -675,7 +722,7 @@ function RescuePage() {
                                 </span>
                               </div>
                             </div>
-                          </Link>
+                          </a>
                         );
                       })}
                     </div>

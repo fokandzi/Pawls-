@@ -53,7 +53,7 @@ async function seedRescue() {
   if (Number(count.count) < 10) for (let i = Number(count.count); i < dogs.length; i++) {
     const [s] = await sql`INSERT INTO shelters (name,location,description,email) VALUES (${`Refuge ${paris[i]} Solidaire`},${paris[i]},'A volunteer-led Paris rescue helping dogs find patient, loving homes.','adoptions@pawls.example') RETURNING id`;
     const d = dogs[i];
-    await sql`INSERT INTO rescue_dogs (shelter_id,name,breed,age,size,gender,description,good_with_dogs,good_with_kids,good_with_cats,photo_url,urgent) VALUES (${s.id},${d[0]},${d[1]},${d[2]},${d[3]},${i % 2 ? 'female' : 'male'},${`Meet ${d[0]}, a gentle rescue looking for a forever family in the Paris area.`},true,${i % 4 !== 0},${i % 3 === 0},${`https://placedog.net/600/500?random=rescue-${i}`},${i % 5 === 0})`;
+    await sql`INSERT INTO rescue_dogs (shelter_id,name,breed,age,size,gender,description,good_with_dogs,good_with_kids,good_with_cats,photo_url,urgent) VALUES (${s.id},${d[0]},${d[1]},${d[2]},${d[3]},${i % 2 ? 'female' : 'male'},${`Meet ${d[0]}, a gentle rescue looking for a forever family in the Paris area.`},true,${i % 4 !== 0},${i % 3 === 0},${`https://placedog.net/600/500?id=${i}`},${i % 5 === 0})`;
   }
 }
 

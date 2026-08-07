@@ -60,7 +60,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "social",
     member_count: 234,
-    image_url: "https://placedog.net/500/300?random=group-0",
+    image_url: "https://picsum.photos/seed/pawls-connect-621/800/480",
     events: [
       {
         title: "Bois de Vincennes Sunday Stroll",
@@ -70,7 +70,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-02",
         start_time: "10:00",
         attendee_count: 34,
-        image_url: "https://placedog.net/500/300?random=event-0",
+        image_url: "https://picsum.photos/seed/pawls-connect-193/800/480",
       },
       {
         title: "Seine-Side Doggy Apéro",
@@ -80,7 +80,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-15",
         start_time: "18:00",
         attendee_count: 22,
-        image_url: "https://placedog.net/500/300?random=event-1",
+        image_url: "https://picsum.photos/seed/pawls-connect-755/800/480",
       },
     ],
   },
@@ -91,7 +91,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "playgroup",
     member_count: 156,
-    image_url: "https://placedog.net/500/300?random=group-1",
+    image_url: "https://picsum.photos/seed/pawls-connect-338/800/480",
     events: [
       {
         title: "Puppy Socialisation Hour",
@@ -101,7 +101,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-01",
         start_time: "09:30",
         attendee_count: 12,
-        image_url: "https://placedog.net/500/300?random=event-2",
+        image_url: "https://picsum.photos/seed/pawls-connect-122/800/480",
       },
     ],
   },
@@ -112,7 +112,7 @@ const seedGroups: GroupSeed[] = [
     location: "Île-de-France",
     category: "outdoor",
     member_count: 189,
-    image_url: "https://placedog.net/500/300?random=group-2",
+    image_url: "https://picsum.photos/seed/pawls-connect-456/800/480",
     events: [
       {
         title: "Fontainebleau Forest Trail",
@@ -122,7 +122,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-08",
         start_time: "08:00",
         attendee_count: 28,
-        image_url: "https://placedog.net/500/300?random=event-3",
+        image_url: "https://picsum.photos/seed/pawls-connect-521/800/480",
       },
     ],
   },
@@ -133,7 +133,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "breed-specific",
     member_count: 98,
-    image_url: "https://placedog.net/500/300?random=group-3",
+    image_url: "https://picsum.photos/seed/pawls-connect-265/800/480",
     events: [
       {
         title: "Corgi Coffee Morning",
@@ -143,7 +143,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-05",
         start_time: "10:30",
         attendee_count: 16,
-        image_url: "https://placedog.net/500/300?random=event-4",
+        image_url: "https://picsum.photos/seed/pawls-connect-128/800/480",
       },
     ],
   },
@@ -154,7 +154,7 @@ const seedGroups: GroupSeed[] = [
     location: "Multiple locations",
     category: "sport",
     member_count: 312,
-    image_url: "https://placedog.net/500/300?random=group-4",
+    image_url: "https://picsum.photos/seed/pawls-connect-907/800/480",
     events: [
       {
         title: "Beginner Agility Workshop",
@@ -164,7 +164,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-09",
         start_time: "13:00",
         attendee_count: 20,
-        image_url: "https://placedog.net/500/300?random=event-5",
+        image_url: "https://picsum.photos/seed/pawls-connect-792/800/480",
       },
       {
         title: "Summer Agility Competition",
@@ -174,7 +174,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-22",
         start_time: "09:00",
         attendee_count: 45,
-        image_url: "https://placedog.net/500/300?random=event-6",
+        image_url: "https://picsum.photos/seed/pawls-connect-32/800/480",
       },
     ],
   },
@@ -185,7 +185,7 @@ const seedGroups: GroupSeed[] = [
     location: "Paris",
     category: "walking",
     member_count: 145,
-    image_url: "https://placedog.net/500/300?random=group-5",
+    image_url: "https://picsum.photos/seed/pawls-connect-193/800/480",
     events: [
       {
         title: "Sunset Shoot at Buttes-Chaumont",
@@ -195,7 +195,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-03",
         start_time: "19:30",
         attendee_count: 19,
-        image_url: "https://placedog.net/500/300?random=event-7",
+        image_url: "https://picsum.photos/seed/pawls-connect-966/800/480",
       },
     ],
   },
@@ -206,7 +206,7 @@ const seedGroups: GroupSeed[] = [
     location: "Île-de-France",
     category: "breed-specific",
     member_count: 67,
-    image_url: "https://placedog.net/500/300?random=group-6",
+    image_url: "https://picsum.photos/seed/pawls-connect-128/800/480",
     events: [
       {
         title: "Berner Walk & BBQ",
@@ -216,7 +216,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-16",
         start_time: "11:00",
         attendee_count: 31,
-        image_url: "https://placedog.net/500/300?random=event-8",
+        image_url: "https://picsum.photos/seed/pawls-connect-911/800/480",
       },
     ],
   },
@@ -227,7 +227,7 @@ const seedGroups: GroupSeed[] = [
     location: "Multiple locations",
     category: "support",
     member_count: 423,
-    image_url: "https://placedog.net/500/300?random=group-7",
+    image_url: "https://picsum.photos/seed/pawls-connect-911/800/480",
     events: [
       {
         title: "Reactive Dog Pack Walk",
@@ -237,7 +237,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-07",
         start_time: "09:00",
         attendee_count: 10,
-        image_url: "https://placedog.net/500/300?random=event-9",
+        image_url: "https://picsum.photos/seed/pawls-connect-142/800/480",
       },
       {
         title: "Rescue Dog Picnic",
@@ -247,7 +247,7 @@ const seedGroups: GroupSeed[] = [
         event_date: "2026-08-20",
         start_time: "12:00",
         attendee_count: 25,
-        image_url: "https://placedog.net/500/300?random=event-10",
+        image_url: "https://picsum.photos/seed/pawls-connect-809/800/480",
       },
     ],
   },
@@ -323,9 +323,40 @@ const joinEvent = createServerFn({ method: "POST" })
 
 import { seoHead, SEO } from "../lib/seo";
 
+/** Static fallback data — used when Neon DB is unreachable on Vercel SSR */
+function staticConnectData() {
+  const groups: Group[] = seedGroups.map((g, i) => ({
+    id: i + 1,
+    name: g.name,
+    description: g.description,
+    location: g.location,
+    category: g.category,
+    member_count: g.member_count,
+    image_url: g.image_url,
+  }));
+  const events: Event[] = [];
+  seedGroups.forEach((g, gi) => {
+    g.events.forEach((e, ei) => {
+      events.push({
+        id: gi * 100 + ei + 1,
+        group_id: gi + 1,
+        group_name: g.name,
+        title: e.title,
+        description: e.description,
+        location: e.location,
+        event_date: e.event_date,
+        start_time: e.start_time,
+        attendee_count: e.attendee_count,
+        image_url: e.image_url,
+      });
+    });
+  });
+  return { groups, events };
+}
+
 export const Route = createFileRoute("/connect")({
   head: () => seoHead(SEO.connect),
-  loader: () => withTimeout(getConnectData(), 8000, "Community data").catch(() => ({ groups: [], events: [], error: "Could not load community data" })),
+  loader: async () => staticConnectData(),
   component: ConnectPage,
 });
 
@@ -431,9 +462,10 @@ function ConnectPage() {
                         key={g.id}
                         className="group overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-sm transition-shadow hover:shadow-lg"
                       >
-                        {/* Banner */}
-                        <div className="flex h-32 items-center justify-center bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-                          <img src={g.image_url || `https://images.unsplash.com/photo-1558788353-f76d92427f16?w=800&h=500&fit=crop&auto=format&sig=${g.id}`} alt={`${g.name} community`} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/logo-full.png"; }} />
+                        {/* Banner — image constrained to the fixed-height container so it
+                            never overflows into the title/content below */}
+                        <div className="relative h-32 overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
+                          <img src={g.image_url || `https://picsum.photos/seed/pawls-connect-552/800/480`} alt={`${g.name} community`} className="absolute inset-0 block h-full w-full object-cover" />
                         </div>
 
                         {/* Content */}

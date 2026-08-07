@@ -1,9 +1,8 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getTrendingDogs } from "../db/schema";
 import { seoHead, SEO } from "../lib/seo";
-import { withTimeout } from "../lib/timeout";
 import { EmptyState } from "../lib/empty-state";
 
 type TrendingDog = {
@@ -39,29 +38,19 @@ function rankBadge(index: number) {
 
 export const Route = createFileRoute("/viral")({
   head: () => seoHead(SEO.viral),
+  loader: async () => {
+    try {
+      return { dogs: await getTrendingDogs(), error: "" };
+    } catch (err: any) {
+      return { dogs: [], error: err?.message || "Failed to load trending dogs" };
+    }
+  },
   component: ViralPage,
 });
 
 function ViralPage() {
-  const [dogs, setDogs] = useState<TrendingDog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { dogs, error } = Route.useLoaderData();
   const [selectedDog, setSelectedDog] = useState<TrendingDog | null>(null);
-
-  useEffect(() => {
-    const fetchDogs = async () => {
-      setLoading(true);
-      try {
-        const result = await withTimeout(getTrendingDogs(), 8000, "Trending dogs loading");
-        setDogs(result);
-      } catch (err: any) {
-        setError(err.message?.includes("timed out") ? "Taking longer than expected — please try again." : (err.message || "Failed to load trending dogs"));
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDogs();
-  }, []);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -90,7 +79,7 @@ function ViralPage() {
       <section className="flex-1 bg-white px-6 pb-20">
         <div className="mx-auto max-w-6xl">
           {/* Loading */}
-          {loading && (
+          {false && (
             <div className="flex flex-col items-center justify-center py-20">
               <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[var(--pawls-cream-200)] border-t-[var(--pawls-terracotta-500)]" />
               <p className="text-gray-500">Loading trending dogs...</p>
@@ -98,17 +87,17 @@ function ViralPage() {
           )}
 
           {/* Error */}
-          {!loading && error && (
+          {error && (
             <EmptyState emoji="" title="Couldn't load trending dogs" description={error} />
           )}
 
           {/* Empty state */}
-          {!loading && !error && dogs.length === 0 && (
+          {!error && dogs.length === 0 && (
             <EmptyState emoji="" title="No trending dogs yet" description="Be the first to make your dog go viral!" action={{ label: " Create Profile", to: "/match/create" }} />
           )}
 
           {/* Dog grid */}
-          {!loading && !error && dogs.length > 0 && (
+          {!error && dogs.length > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {dogs.map((dog, i) => (
                 <button
@@ -118,15 +107,14 @@ function ViralPage() {
                 >
                   {/* Photo */}
                   <div className="relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)] sm:h-48">
+                    <span className="absolute inset-0 flex items-center justify-center text-6xl">🐶</span>
                     {dog.photo_url ? (
                       <img
                         src={dog.photo_url}
                         alt={dog.dog_name}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        className="relative z-10 h-full w-full object-cover transition-transform group-hover:scale-105"
                       />
-                    ) : (
-                      <span className="text-6xl"></span>
-                    )}
+                    ) : null}
                     {/* Rank badge */}
                     {rankBadge(i)}
                     {/* Swipe count */}
@@ -167,16 +155,15 @@ function ViralPage() {
             </button>
 
             {/* Photo */}
-            <div className="relative flex h-56 items-center justify-center bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
+            <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
+              <span className="absolute inset-0 flex items-center justify-center text-8xl">🐶</span>
               {selectedDog.photo_url ? (
                 <img
                   src={selectedDog.photo_url}
                   alt={selectedDog.dog_name}
-                  className="h-full w-full object-cover"
+                  className="relative z-10 h-full w-full object-cover"
                 />
-              ) : (
-                <span className="text-8xl"></span>
-              )}
+              ) : null}
               <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-sm font-bold text-white backdrop-blur-sm">
                  {selectedDog.swipe_count} likes
               </span>

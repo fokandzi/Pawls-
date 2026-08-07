@@ -1,7 +1,6 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
 import { sql } from "../db";
 import { createVenuesTable } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
@@ -20,9 +19,29 @@ type Venue = {
   dog_features: string[] | null;
   rating: number;
   image_url: string | null;
+  photo_url: string;
 };
 
 // ── Seed data ────────────────────────────────────────────────────────────────
+
+/** Deterministic map thumbnail — OpenStreetMap slippy tile centred on the
+ *  venue's coordinates. Guaranteed to show a map (never a random photo, which
+ *  is why picsum was dropped: its seeded images can be animals). Loads
+ *  client-side like any <img>; no API key needed. */
+function slippyTile(lat: number, lng: number, zoom: number) {
+  const n = 2 ** zoom;
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
+  );
+  return { x, y };
+}
+
+const venuePhoto = (v: { lat: number; lng: number }, zoom = 15) => {
+  const { x, y } = slippyTile(v.lat, v.lng, zoom);
+  return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+};
 
 const seedVenues = [
   {
@@ -210,9 +229,21 @@ const getVenues = createServerFn({ method: "POST" }).handler(async () => {
         CASE type WHEN 'park' THEN 1 WHEN 'beach' THEN 2 WHEN 'trail' THEN 3 WHEN 'cafe' THEN 4 WHEN 'bar' THEN 5 ELSE 6 END,
         rating DESC
     `;
-    return { venues: rows as Venue[], error: null };
+    // Always use our deterministic map tiles. Existing database rows may
+    // contain legacy photo URLs, so do not trust image_url here.
+    return { venues: (rows as Venue[]).map((v) => ({ ...v, photo_url: venuePhoto(v) })), error: null };
   } catch {
-    return { venues: null, error: "Database not connected" };
+    // SSR must remain useful when Neon is unavailable on a serverless render.
+    // The same static venue catalogue powers the map grid and cards.
+    return {
+      venues: seedVenues.map((v, i) => ({
+        ...v,
+        id: i + 1,
+        image_url: null,
+        photo_url: venuePhoto(v),
+      })) as Venue[],
+      error: null,
+    };
   }
 });
 
@@ -222,7 +253,27 @@ import { seoHead, SEO } from "../lib/seo";
 
 export const Route = createFileRoute("/venues")({
   head: () => seoHead(SEO.venues),
-  loader: () => getVenues(),
+  validateSearch: (search: Record<string, unknown>) => ({
+    // Undefined (not null) for absent filters: TanStack serialises null into the
+    // URL (?type=null&city=null), which pollutes links and reloads. "null" is
+    // also guarded for URLs that already carry it.
+    type: typeof search.type === "string" && search.type && search.type !== "null" ? search.type : undefined,
+    city: typeof search.city === "string" && search.city && search.city !== "null" ? search.city : undefined,
+  }),
+  loader: async ({ location }) => {
+    // Read filters from the router-parsed search params (URL query params) so
+    // filtering works without JS (plain <a href> links, no client state) and
+    // without touching the raw request object (unreliable on Vercel → 500s).
+    const type = (location.search.type as string | null) ?? null;
+    const city = (location.search.city as string | null) ?? null;
+    const data = await getVenues();
+    const allVenues: Venue[] = (data as any)?.venues ?? [];
+    const error = (data as any)?.error ?? null;
+    let venues = allVenues;
+    if (type) venues = venues.filter((v) => v.type === type);
+    if (city) venues = venues.filter((v) => v.city === city);
+    return { venues, allVenues, type, city, error };
+  },
   component: VenuesPage,
 });
 
@@ -241,95 +292,17 @@ function renderStars(rating: number) {
 function VenuesPage() {
   const data = Route.useLoaderData();
   const venues: Venue[] = (data as any)?.venues ?? [];
+  const allVenues: Venue[] = (data as any)?.allVenues ?? venues;
   const error = (data as any)?.error ?? null;
+  const typeFilter = (data as any)?.type ?? null;
+  const cityFilter = (data as any)?.city ?? null;
 
-  const [typeFilter, setTypeFilter] = useState<string | null>(null);
-  const [cityFilter, setCityFilter] = useState<string | null>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  // Filter chips are built from the full list; the visible list is already
+  // filtered server-side from the URL query params.
+  const cities = [...new Set(allVenues.map((v) => v.city))].sort();
+  const types = [...new Set(allVenues.map((v) => v.type))].sort();
 
-  const cities = [...new Set(venues.map((v) => v.city))].sort();
-  const types = [...new Set(venues.map((v) => v.type))].sort();
-
-  const filteredVenues = venues.filter((v) => {
-    if (typeFilter && v.type !== typeFilter) return false;
-    if (cityFilter && v.city !== cityFilter) return false;
-    return true;
-  });
-
-  // Initialize Leaflet map (client-only)
-  useEffect(() => {
-    if (typeof window === "undefined" || !mapRef.current) return;
-    if (mapInstanceRef.current) {
-      // Already initialized — update markers
-      return;
-    }
-
-    const L = (window as any).L;
-    if (!L) return;
-
-    const map = L.map(mapRef.current).setView([48.8566, 2.3522], 12);
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(map);
-
-    mapInstanceRef.current = map;
-
-    return () => {
-      map.remove();
-      mapInstanceRef.current = null;
-    };
-  }, []);
-
-  // Sync markers with filtered venues
-  useEffect(() => {
-    const L = (window as any).L;
-    const map = mapInstanceRef.current;
-    if (!L || !map) return;
-
-    // Clear existing markers
-    markersRef.current.forEach((m) => map.removeLayer(m));
-    markersRef.current = [];
-
-    if (filteredVenues.length === 0) return;
-
-    const bounds = L.latLngBounds();
-
-    filteredVenues.forEach((v) => {
-      const cfg = typeConfig[v.type] ?? { label: v.type, emoji: "", bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-300" };
-      const marker = L.marker([v.lat, v.lng])
-        .addTo(map)
-        .bindPopup(
-          `<div style="font-family:sans-serif;max-width:200px">
-            <strong>${cfg.emoji} ${v.name}</strong><br/>
-            <small>${cfg.label} · ${v.city}</small><br/>
-            <small style="color:#f59e0b">${renderStars(v.rating)} ${Number(v.rating).toFixed(1)}</small>
-          </div>`
-        );
-      markersRef.current.push(marker);
-      bounds.extend([v.lat, v.lng]);
-    });
-
-    map.fitBounds(bounds, { padding: [30, 30] });
-  }, [filteredVenues]);
-
-  const scrollToVenue = (venue: Venue) => {
-    const map = mapInstanceRef.current;
-    if (map) {
-      map.setView([venue.lat, venue.lng], 15, { animate: true });
-      // Open popup
-      setTimeout(() => {
-        const marker = markersRef.current.find((m) => {
-          const pos = m.getLatLng();
-          return pos.lat === venue.lat && pos.lng === venue.lng;
-        });
-        if (marker) marker.openPopup();
-      }, 300);
-    }
-  };
+  const filteredVenues = venues;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -361,10 +334,16 @@ function VenuesPage() {
           <section className="bg-white px-6 pb-8">
             <div className="mx-auto max-w-6xl">
               <div
-                ref={mapRef}
-                className="h-[400px] w-full overflow-hidden rounded-2xl border border-[var(--pawls-cream-200)] shadow-md"
-                style={{ zIndex: 1 }}
-              />
+                className="grid h-[400px] w-full grid-cols-2 gap-2 overflow-hidden rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] p-2 shadow-md sm:grid-cols-3"
+              >
+                {filteredVenues.slice(0, 6).map((venue) => (
+                  <figure key={venue.id} className="relative min-h-0 overflow-hidden rounded-lg bg-[var(--pawls-cream-100)]">
+                    <img src={venue.photo_url} alt={`Location view of ${venue.name}`} className="block h-full min-h-0 w-full rounded-lg object-cover" />
+                    <figcaption className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-xs font-semibold text-white">{venue.name}</figcaption>
+                  </figure>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-gray-400">Map tiles © OpenStreetMap contributors</p>
             </div>
           </section>
 
@@ -372,16 +351,26 @@ function VenuesPage() {
           <section className="bg-white px-6 pb-8">
             <div className="mx-auto max-w-6xl">
               <div className="flex flex-wrap items-center gap-4">
-                {/* Type filter */}
+                {/* Type filter — plain links so filtering works without JS */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Type</span>
                   <div className="flex flex-wrap gap-2">
+                    <a
+                      href="/venues"
+                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+                        !typeFilter && !cityFilter
+                          ? "bg-[var(--pawls-terracotta-500)] text-white shadow-sm"
+                          : "bg-[var(--pawls-cream-50)] text-gray-600 hover:bg-[var(--pawls-cream-100)]"
+                      }`}
+                    >
+                      All
+                    </a>
                     {types.map((t) => {
                       const cfg = typeConfig[t] ?? { label: t, emoji: "" };
                       return (
-                        <button
+                        <a
                           key={t}
-                          onClick={() => setTypeFilter(typeFilter === t ? null : t)}
+                          href={`/venues?type=${encodeURIComponent(t)}${cityFilter ? `&city=${encodeURIComponent(cityFilter)}` : ""}`}
                           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
                             typeFilter === t
                               ? "bg-[var(--pawls-terracotta-500)] text-white shadow-sm"
@@ -389,20 +378,20 @@ function VenuesPage() {
                           }`}
                         >
                           {cfg.emoji} {cfg.label}
-                        </button>
+                        </a>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* City filter */}
+                {/* City filter — plain links */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">City</span>
                   <div className="flex flex-wrap gap-2">
                     {cities.map((c) => (
-                      <button
+                      <a
                         key={c}
-                        onClick={() => setCityFilter(cityFilter === c ? null : c)}
+                        href={`/venues?city=${encodeURIComponent(c)}${typeFilter ? `&type=${encodeURIComponent(typeFilter)}` : ""}`}
                         className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
                           cityFilter === c
                             ? "bg-[var(--pawls-terracotta-500)] text-white shadow-sm"
@@ -410,26 +399,23 @@ function VenuesPage() {
                         }`}
                       >
                         {c}
-                      </button>
+                      </a>
                     ))}
                   </div>
                 </div>
 
                 {/* Clear */}
                 {(typeFilter || cityFilter) && (
-                  <button
-                    onClick={() => {
-                      setTypeFilter(null);
-                      setCityFilter(null);
-                    }}
+                  <a
+                    href="/venues"
                     className="text-sm font-medium text-[var(--pawls-terracotta-500)] hover:text-[var(--pawls-terracotta-700)] underline underline-offset-2"
                   >
                     Clear filters
-                  </button>
+                  </a>
                 )}
               </div>
               <p className="mt-3 text-sm text-gray-400">
-                Showing {filteredVenues.length} of {venues.length} venues
+                Showing {filteredVenues.length} of {allVenues.length} venues
               </p>
             </div>
           </section>
@@ -458,12 +444,13 @@ function VenuesPage() {
                     return (
                       <div
                         key={venue.id}
-                        onClick={() => scrollToVenue(venue)}
                         className="group cursor-pointer overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-sm transition-all hover:border-amber-300 hover:shadow-md"
                       >
-                        {/* Card image */}
-                        <div className="flex h-40 items-center justify-center bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-                          <span className="text-6xl">{cfg.emoji}</span>
+                        {/* Card image — constrained to the fixed-height container
+                            (absolute positioning; h-full in a flex parent can fall
+                            back to intrinsic size and overflow into the content) */}
+                        <div className="relative h-40 overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
+                          <img src={venue.photo_url} alt={venue.name} className="absolute inset-0 h-full w-full object-cover" />
                         </div>
 
                         {/* Card content */}

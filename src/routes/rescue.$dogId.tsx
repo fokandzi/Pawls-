@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createRescueTables } from "../db/schema";
+import { staticRescueDogs } from "./rescue";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,11 +56,21 @@ const getDogDetail = createServerFn({ method: "GET" })
       `;
 
       if (!dog) {
+        // Fall back to deterministic static data (works without a database).
+        const staticDog = staticRescueDogs().find((d) => d.id === data.dogId);
+        if (staticDog) {
+          return { dog: staticDog as RescueDogDetail, error: null };
+        }
         return { dog: null, error: "Dog not found" };
       }
 
       return { dog: dog as RescueDogDetail, error: null };
     } catch {
+      // Database unreachable (e.g. Vercel SSR) — serve the static dog instead.
+      const staticDog = staticRescueDogs().find((d) => d.id === data.dogId);
+      if (staticDog) {
+        return { dog: staticDog as RescueDogDetail, error: null };
+      }
       return { dog: null, error: "Database not connected" };
     }
   });
@@ -199,9 +210,9 @@ function RescueDogDetailPage() {
             {/* Left column: photo + key stats */}
             <div className="lg:col-span-1">
               {/* Photo placeholder */}
-              <div className="flex h-64 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)] lg:h-80">
+              <div className="relative h-64 overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)] lg:h-80">
                 {dog.photo_url ? (
-                  <img src={dog.photo_url} alt={`${dog.name} — ${dog.breed}`} className="h-full w-full rounded-2xl object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  <img src={dog.photo_url} alt={`${dog.name} — ${dog.breed}`} className="absolute inset-0 h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                 ) : (
                   <span className="text-9xl">{dogEmoji(dog.breed)}</span>
                 )}

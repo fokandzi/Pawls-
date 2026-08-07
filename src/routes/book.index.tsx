@@ -129,9 +129,11 @@ function BookPage() {
                     };
 
                     return (
-                      <span
+                      <a
                         key={provider.id}
-                        onClick={() => { window.location.href = `/book/${provider.id}`; }}
+                        href={`/book/${provider.id}`}
+                        target="_self"
+                        rel="external"
                         className="group relative flex cursor-pointer flex-col rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm transition-all duration-300 hover:border-amber-300 hover:shadow-md"
                       >
                         {/* Image placeholder */}
@@ -178,9 +180,9 @@ function BookPage() {
                         <div className="mt-4 flex items-center gap-1 text-sm font-medium text-[var(--pawls-terracotta-500)] opacity-0 transition-opacity group-hover:opacity-100">
                           View services →
                         </div>
-                      </span>
-                    );
-                  })}
+                      </a>
+                      );
+                      })}
                 </div>
               )}
             </div>

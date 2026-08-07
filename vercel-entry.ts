@@ -42,9 +42,17 @@ export default async function vercelHandler(
   res: ServerResponse,
 ): Promise<void> {
   try {
-    const webRes = await fetchHandler.fetch(toWebRequest(req));
+    const request = toWebRequest(req);
+    const webRes = await fetchHandler.fetch(request);
     res.statusCode = webRes.status;
     webRes.headers.forEach((value, key) => res.setHeader(key, value));
+    // Never cache SSR responses. The match page is a URL-param state machine
+    // (swipe state lives in the query string) — a stale HTML response is what
+    // makes swipes appear to "cycle between 2 profiles". Static assets are
+    // served by Vercel's filesystem handler, so everything reaching this
+    // function is dynamic HTML or an API response. Also sets Cache-Control on
+    // the browser side so back/forward and bfcache never resurrect old markup.
+    res.setHeader("Cache-Control", "no-store, max-age=0, must-revalidate");
     if (webRes.body) {
       const reader = webRes.body.getReader();
       for (;;) {

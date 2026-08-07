@@ -23,11 +23,18 @@ export const parisDogProfiles = [
 
 export async function ensureDogProfilesSeeded() {
   const [count] = await sql()`SELECT COUNT(*)::int AS count FROM dog_profiles`;
-  if (Number(count?.count) > 0) return 0;
-  for (const p of parisDogProfiles) {
+  if (Number(count?.count) > 0) {
+    for (const [index, p] of parisDogProfiles.entries()) {
+      const photoUrl = `https://placedog.net/500/500?id=${index + 1}`;
+      await sql()`UPDATE dog_profiles SET photo_url = ${photoUrl} WHERE dog_name = ${p[1]} AND photo_url IS NULL`;
+    }
+    return 0;
+  }
+  for (const [index, p] of parisDogProfiles.entries()) {
+    const photoUrl = `https://placedog.net/500/500?id=${index + 1}`;
     await sql()`INSERT INTO dog_profiles
       (owner_name,dog_name,breed,age,size,energy_level,temperament,temperament_tags,bio,location,distance_km,photo_url)
-      VALUES (${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6][0]},${p[6]},${p[7]},${p[8]},${p[9]},${`https://placedog.net/400/400?random=${p[1]}`})`;
+      VALUES (${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6][0]},${p[6]},${p[7]},${p[8]},${p[9]},${photoUrl})`;
   }
   return parisDogProfiles.length;
 }

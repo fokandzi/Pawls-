@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { setCookie } from "@tanstack/react-start/server";
 import { useState } from "react";
 import { trackEvent, identifyUser } from "../lib/analytics";
 import { sql } from "../db";
@@ -40,6 +41,14 @@ const createDogProfile = createServerFn({ method: "POST" })
       VALUES (${data.ownerName}, ${data.dogName}, ${data.breed}, ${data.age}, ${data.size}, ${data.energyLevel}, ${data.temperament}, ${data.bio}, ${data.location}, ${data.email || null}, ${data.instagram || null}, ${data.tiktok || null}, ${data.twitter || null}, ${data.youtube || null})
       RETURNING id
     `;
+
+    // Set the profile cookie server-side so the /match SSR loader can read it
+    // on the next request (localStorage alone is invisible to the server).
+    setCookie("pawnder-profile-id", String(profile.id), {
+      path: "/",
+      maxAge: 31536000,
+      sameSite: "lax",
+    });
 
     return { success: true, profileId: profile.id as number };
   });
@@ -88,6 +97,10 @@ function CreateProfilePage() {
       if (result.success && result.profileId) {
         if (typeof window !== "undefined") {
           localStorage.setItem("pawnder-profile-id", String(result.profileId));
+          // Fallback: also write the cookie client-side so the /match SSR
+          // loader always sees it on the next full page load, even if the
+          // server-side Set-Cookie is stripped anywhere in the deploy chain.
+          document.cookie = `pawnder-profile-id=${result.profileId}; Path=/; Max-Age=31536000; SameSite=Lax`;
           trackEvent("profile_created");
           if (form.email) {
             identifyUser(form.email);
