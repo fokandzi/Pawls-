@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppHeader, AppFooter } from "../lib/app-header";
 import { seoHead, SEO } from "../lib/seo";
 
 export const Route = createFileRoute("/match/create")({
@@ -13,7 +14,7 @@ const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 function CreateProfilePage() {
   return (
     <div className="flex min-h-dvh flex-col">
-      {/* Header */}
+      <AppHeader active="match" />
 
       {/* Form */}
       <section className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-12">
@@ -216,7 +217,7 @@ function CreateProfilePage() {
         </div>
       </section>
 
-      {/* Footer */}
+      <AppFooter />
     </div>
   );
 }
