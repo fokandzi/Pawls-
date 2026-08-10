@@ -12,6 +12,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import handler from "./dist/server/server.js";
 import { handleRegisterPost } from "./register-handler.ts";
+import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 
 const fetchHandler = handler as {
   fetch: (request: Request) => Response | Promise<Response>;
@@ -54,6 +55,24 @@ export default async function vercelHandler(
       registerRes.headers.forEach((value, key) => res.setHeader(key, value));
       if (registerRes.body) {
         const reader = registerRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+
+    // Native POST /match/create — dog profile form posts here. Handle it before
+    // the SSR handler, same pattern as POST /register.
+    if (request.method === "POST" && new URL(request.url).pathname === "/match/create") {
+      const createRes = await handleMatchCreatePost(request);
+      res.statusCode = createRes.status;
+      createRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (createRes.body) {
+        const reader = createRes.body.getReader();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;

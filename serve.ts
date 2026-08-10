@@ -13,6 +13,7 @@
 import handler from "./dist/server/server.js";
 import { handleStripeWebhook } from "./webhook-handler.ts";
 import { handleRegisterPost } from "./register-handler.ts";
+import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
 // (<label>.<PUBLIC_SITE_DOMAIN>) is reverse-proxied to 0.0.0.0:3000 inside the
@@ -50,6 +51,12 @@ for (let attempt = 1; ; attempt++) {
         // before the SSR handler (which would render HTML for it instead).
         if (req.method === "POST" && pathname === "/register") {
           return handleRegisterPost(req);
+        }
+
+        // Native POST /match/create — dog profile form posts here. Handled
+        // before the SSR handler, same as POST /register.
+        if (req.method === "POST" && pathname === "/match/create") {
+          return handleMatchCreatePost(req);
         }
 
         // Intercept Stripe webhook requests before the SSR handler.
