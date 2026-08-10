@@ -12,6 +12,7 @@
 // the takeover works across user boundaries.
 import handler from "./dist/server/server.js";
 import { handleStripeWebhook } from "./webhook-handler.ts";
+import { handleRegisterPost } from "./register-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
 // (<label>.<PUBLIC_SITE_DOMAIN>) is reverse-proxied to 0.0.0.0:3000 inside the
@@ -44,6 +45,12 @@ for (let attempt = 1; ; attempt++) {
       hostname: HOST,
       async fetch(req) {
         const { pathname } = new URL(req.url);
+
+        // Native POST /register — sign-up form posts here. Must be handled
+        // before the SSR handler (which would render HTML for it instead).
+        if (req.method === "POST" && pathname === "/register") {
+          return handleRegisterPost(req);
+        }
 
         // Intercept Stripe webhook requests before the SSR handler.
         // TanStack Start SSR renders HTML for all routes including API routes,

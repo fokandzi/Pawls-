@@ -63,6 +63,12 @@ export const SEO = {
       "Swipe right to find compatible dog playmates near you. Filter by temperament, size, energy level, and location. Make playdates happen with Pawls Match.",
     path: "/match",
   } as SEOPage,
+  register: {
+    title: "Sign Up for Pawls — Create Your Free Account",
+    description:
+      "Create your free Pawls account and start matching your dog with compatible playmates, booking services, and more.",
+    path: "/register",
+  } as SEOPage,
 
   "match/create": {
     title: "Create Your Dog Profile — Join Pawls Match",

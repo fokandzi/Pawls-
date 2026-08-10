@@ -11,6 +11,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import handler from "./dist/server/server.js";
+import { handleRegisterPost } from "./register-handler.ts";
 
 const fetchHandler = handler as {
   fetch: (request: Request) => Response | Promise<Response>;
@@ -43,6 +44,26 @@ export default async function vercelHandler(
 ): Promise<void> {
   try {
     const request = toWebRequest(req);
+
+    // Native POST /register — sign-up form posts here. Handle it before the SSR
+    // handler (which would render HTML for it instead) and before the generic
+    // Cache-Control override below, since the redirect must stay no-store.
+    if (request.method === "POST" && new URL(request.url).pathname === "/register") {
+      const registerRes = await handleRegisterPost(request);
+      res.statusCode = registerRes.status;
+      registerRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (registerRes.body) {
+        const reader = registerRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+
     const webRes = await fetchHandler.fetch(request);
     res.statusCode = webRes.status;
     webRes.headers.forEach((value, key) => res.setHeader(key, value));
