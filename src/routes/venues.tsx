@@ -43,6 +43,9 @@ const venuePhoto = (v: { lat: number; lng: number }, zoom = 15) => {
   return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
 };
 
+const venueImage = (v: { name: string; type: string }) =>
+  `https://picsum.photos/seed/${v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${v.type}/800/500`;
+
 const seedVenues = [
   {
     name: "Bois de Vincennes",
@@ -215,10 +218,10 @@ const getVenues = createServerFn({ method: "POST" }).handler(async () => {
     const [countRow] = await sql()`SELECT COUNT(*)::int AS count FROM venues`;
     if (Number(countRow.count) === 0) {
       for (const v of seedVenues) {
-        await sql()`
-          INSERT INTO venues (name, type, address, city, lat, lng, description, dog_features, rating)
-          VALUES (${v.name}, ${v.type}, ${v.address}, ${v.city}, ${v.lat}, ${v.lng}, ${v.description}, ${v.dog_features}, ${v.rating})
-        `;
+            await sql()`
+              INSERT INTO venues (name, type, address, city, lat, lng, description, dog_features, rating, image_url)
+              VALUES (${v.name}, ${v.type}, ${v.address}, ${v.city}, ${v.lat}, ${v.lng}, ${v.description}, ${v.dog_features}, ${v.rating}, ${venueImage(v)})
+            `;
       }
     }
 
@@ -229,19 +232,18 @@ const getVenues = createServerFn({ method: "POST" }).handler(async () => {
         CASE type WHEN 'park' THEN 1 WHEN 'beach' THEN 2 WHEN 'trail' THEN 3 WHEN 'cafe' THEN 4 WHEN 'bar' THEN 5 ELSE 6 END,
         rating DESC
     `;
-    // Always use our deterministic map tiles. Existing database rows may
-    // contain legacy photo URLs, so do not trust image_url here.
-    return { venues: (rows as Venue[]).map((v) => ({ ...v, photo_url: venuePhoto(v) })), error: null };
+    // Preserve image_url from DB if present; always compute photo_url for map tiles.
+    return { venues: (rows as Venue[]).map((v) => ({ ...v, image_url: v.image_url || venueImage(v), photo_url: venuePhoto(v) })), error: null };
   } catch {
     // SSR must remain useful when Neon is unavailable on a serverless render.
     // The same static venue catalogue powers the map grid and cards.
     return {
       venues: seedVenues.map((v, i) => ({
-        ...v,
-        id: i + 1,
-        image_url: null,
-        photo_url: venuePhoto(v),
-      })) as Venue[],
+            ...v,
+            id: i + 1,
+            image_url: venueImage(v),
+            photo_url: venuePhoto(v),
+          })) as Venue[],
       error: null,
     };
   }
@@ -330,20 +332,27 @@ function VenuesPage() {
         </section>
       ) : (
         <>
-          {/* Map */}
+          {/* Interactive Map */}
           <section className="bg-white px-6 pb-8">
             <div className="mx-auto max-w-6xl">
-              <div
-                className="grid h-[400px] w-full grid-cols-2 gap-2 overflow-hidden rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] p-2 shadow-md sm:grid-cols-3"
-              >
-                {filteredVenues.slice(0, 6).map((venue) => (
-                  <figure key={venue.id} className="relative min-h-0 overflow-hidden rounded-lg bg-[var(--pawls-cream-100)]">
-                    <img src={venue.photo_url} alt={`Location view of ${venue.name}`} className="block h-full min-h-0 w-full rounded-lg object-cover" />
-                    <figcaption className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-xs font-semibold text-white">{venue.name}</figcaption>
-                  </figure>
-                ))}
-              </div>
+              <div id="venue-map" className="h-[400px] w-full rounded-2xl border border-[var(--pawls-cream-200)] shadow-md" style={{ zIndex: 0 }} />
               <p className="mt-2 text-xs text-gray-400">Map tiles © OpenStreetMap contributors</p>
+              <script
+                dangerouslySetInnerHTML={{
+                  __html: `(function(){
+  var el=document.getElementById('venue-map');
+  if(!el || typeof L==='undefined') return;
+  var map=L.map(el).setView([48.8566,2.3522],12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'\u00a9 OpenStreetMap'}).addTo(map);
+  var venues=${JSON.stringify(filteredVenues.map(v=>({name:v.name,lat:Number(v.lat),lng:Number(v.lng),type:v.type,city:v.city,address:v.address})))};
+  venues.forEach(function(v){
+    var lat=parseFloat(v.lat), lng=parseFloat(v.lng);
+    if(!isNaN(lat)&&!isNaN(lng)) L.marker([lat,lng]).addTo(map).bindPopup('<strong>'+v.name+'</strong><br>'+v.type.charAt(0).toUpperCase()+v.type.slice(1)+' \u00b7 '+v.city);
+  });
+  setTimeout(function(){ map.invalidateSize(); },100);
+})();`,
+                }}
+              />
             </div>
           </section>
 
@@ -442,15 +451,18 @@ function VenuesPage() {
                     const features = venue.dog_features ?? [];
 
                     return (
-                      <div
+                      <a
                         key={venue.id}
-                        className="group cursor-pointer overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-sm transition-all hover:border-amber-300 hover:shadow-md"
+                        href={`https://www.google.com/maps?q=${venue.lat},${venue.lng}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="group cursor-pointer overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-sm transition-all hover:border-amber-300 hover:shadow-md block no-underline"
                       >
                         {/* Card image — constrained to the fixed-height container
                             (absolute positioning; h-full in a flex parent can fall
                             back to intrinsic size and overflow into the content) */}
                         <div className="relative h-40 overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-                          <img src={venue.photo_url} alt={venue.name} className="absolute inset-0 h-full w-full object-cover" />
+                          <img src={venue.image_url || venue.photo_url} alt={venue.name} className="absolute inset-0 h-full w-full object-cover" />
                         </div>
 
                         {/* Card content */}
@@ -505,7 +517,7 @@ function VenuesPage() {
                             Click to view on map →
                           </div>
                         </div>
-                      </div>
+                      </a>
                     );
                   })}
                 </div>
