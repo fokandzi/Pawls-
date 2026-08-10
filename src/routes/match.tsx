@@ -1,5 +1,5 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { createMatchTables } from "../db/schema";
 import { parisDogProfiles } from "../db/dog-seed";
 import { seoHead, SEO } from "../lib/seo";
@@ -64,7 +64,15 @@ function buildSwipeUrl(swiped: number[], liked: number[], matched: number[], dir
   return `/match?swipe=${direction}&target=${targetId}&swiped=${s}&liked=${l}&matched=${m}`;
 }
 
-function MatchPage(){ return <div className="flex min-h-dvh flex-col"><AppHeader active="match"/><SwipeUI/><AppFooter/></div>; }
+function MatchPage(){
+  // /match has child routes (/match/create, /match/matches, /match/messages/$matchId).
+  // Those children render their own full page shells, so when a child is matched
+  // render <Outlet/> instead of the swipe UI — otherwise the child (e.g. the dog
+  // profile form at /match/create) never appears and the swipe page always shows.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  if (pathname.startsWith("/match/")) return <Outlet />;
+  return <div className="flex min-h-dvh flex-col"><AppHeader active="match"/><SwipeUI/><AppFooter/></div>;
+}
 
 function SwipeUI(){
  const data = Route.useLoaderData() as any;
