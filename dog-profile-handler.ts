@@ -33,6 +33,9 @@ const REQUIRED_FIELDS = [
 const SIZES = new Set(["small", "medium", "large"]);
 const ENERGY_LEVELS = new Set(["low", "medium", "high"]);
 
+/** ~4MB cap — stays under Vercel's 4.5MB serverless request-body limit. */
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+
 const NO_STORE = "no-store, max-age=0, must-revalidate";
 
 function textResponse(body: string, status: number, contentType: string): Response {
@@ -131,13 +134,43 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
     );
   }
 
+  // Optional dog photo: extract the file, validate the size, and upload it to
+  // Uploadthing server-side. Upload failures (missing UPLOADTHING_TOKEN/SECRET,
+  // SDK error, network error) NEVER fail the request — we log and continue with
+  // photo_url = null, and the Match deck already falls back to placedog photos.
+  const photo = form.get("photo");
+  let photoUrl: string | null = null;
+  if (photo instanceof File && photo.size > 0) {
+    if (photo.size > MAX_PHOTO_BYTES) {
+      return textResponse("Photo too large — please choose an image under 4 MB.", 400, "text/plain");
+    }
+    try {
+      const { UTApi } = await import("uploadthing/server");
+      // uploadthing v7 reads UPLOADTHING_TOKEN; also accept the older
+      // UPLOADTHING_SECRET name so the owner's existing key keeps working.
+      const token = process.env.UPLOADTHING_TOKEN ?? process.env.UPLOADTHING_SECRET;
+      const utapi = token ? new UTApi({ token }) : new UTApi();
+      const res = await utapi.uploadFiles(photo);
+      if (res.error) {
+        console.error("[dog-profile] photo upload error (saving profile without photo)", res.error);
+      } else if (res.data?.url) {
+        photoUrl = res.data.url;
+        console.log("[dog-profile] photo uploaded:", photoUrl);
+      } else {
+        console.error("[dog-profile] photo upload returned no URL (saving profile without photo)");
+      }
+    } catch (err) {
+      console.error("[dog-profile] photo upload failed (saving profile without photo)", err);
+    }
+  }
+
   const age = Number(fields.age);
 
   let profileId: number | null = null;
   try {
     await ensureDogProfilesTable();
     const [row] = await sql()`
-      INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, bio, location, email, instagram, tiktok, twitter, youtube)
+      INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, bio, photo_url, location, email, instagram, tiktok, twitter, youtube)
       VALUES (
         ${fields.ownerName},
         ${fields.dogName},
@@ -147,6 +180,7 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
         ${fields.energyLevel},
         ${fields.temperament},
         ${fields.bio || null},
+        ${photoUrl},
         ${fields.location},
         ${fields.email || null},
         ${fields.instagram || null},

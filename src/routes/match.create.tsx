@@ -32,6 +32,7 @@ function CreateProfilePage() {
           <form
             action="/match/create"
             method="POST"
+            encType="multipart/form-data"
             className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 shadow-sm"
           >
             <div className="space-y-4">
@@ -128,6 +129,23 @@ function CreateProfilePage() {
                   rows={3}
                   className={inputClass}
                 />
+              </div>
+
+              {/* Dog Photo */}
+              <div>
+                <label className={labelClass}>
+                  🐾 Dog Photo{" "}
+                  <span className="text-xs font-normal text-gray-400">(optional)</span>
+                </label>
+                <input
+                  type="file"
+                  name="photo"
+                  accept="image/*"
+                  className={`${inputClass} cursor-pointer file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--pawls-terracotta-500)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white file:transition-colors hover:file:bg-[var(--pawls-terracotta-700)]`}
+                />
+                <p className="mt-1.5 text-xs text-gray-500">
+                  Add a photo so your pup stands out in the Match deck. JPG or PNG, up to 4 MB.
+                </p>
               </div>
 
               {/* Location */}
