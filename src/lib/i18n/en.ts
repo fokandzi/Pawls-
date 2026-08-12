@@ -95,6 +95,17 @@ export const en: Record<string, string> = {
   "mydogs.yes": "Yes",
   "mydogs.no": "No",
 
+  // Public pages — Paris beta honesty (home / venues / connect)
+  "home.betaBadge": "Pawls is coming to Paris — Match is available in beta. Services and venues are coming soon.",
+  "venues.pageTitle": "Dog-Friendly Places Near You",
+  "venues.pageSubtitle": "Discover parks, cafés, beaches, and trails that welcome your four-legged friend with open paws — coming soon to Paris.",
+  "venues.comingSoonTitle": "Coming soon",
+  "venues.comingSoonBody": "Pawls Venues are coming soon to Paris. We're currently selecting our first dog-friendly partners.",
+  "connect.pageTitle": "Connect with Dog People",
+  "connect.pageSubtitle": "Join local groups, find events, and build a community around your best friend — coming soon to Paris.",
+  "connect.comingSoonTitle": "Coming soon",
+  "connect.comingSoonBody": "Pawls groups and events are coming soon to Paris.",
+
   // Language toggle
   "lang.switchTo": "Français",
   "lang.label": "Language",

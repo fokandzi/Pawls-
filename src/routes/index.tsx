@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { TrustBadges } from "../lib/social-proof";
 import { AppHeader } from "../lib/app-header";
 import { AppIcon } from "../lib/app-icon";
+import { t, DEFAULT_LANG } from "../lib/i18n";
 
 const getBusinessName = createServerFn({ method: "GET" }).handler(async () => {
   try {
@@ -98,9 +99,9 @@ const features: {
     icon: "venues",
     title: "Venues",
     description:
-      "Explore the interactive map of dog-friendly parks, cafés, and trails. Live in beta with demo venues.",
-    status: "beta",
-    statusLabel: "Beta — live",
+      "Discover dog-friendly parks, cafés, and trails. Coming soon to Paris.",
+    status: "coming-soon",
+    statusLabel: "Coming soon",
   },
 ];
 
@@ -130,12 +131,8 @@ function Home() {
           />
         </Link>
 
-        <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-[var(--pawls-cream-100)] px-3 py-1 text-xs font-semibold text-[var(--pawls-ink-700)] sm:px-4 sm:py-1.5 sm:text-sm">
-          <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--pawls-cream-50)]0 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--pawls-gold-500)] sm:h-2 sm:w-2" />
-          </span>
-          Live beta — Match & Venues are here, more coming soon
+        <span className="mb-5 inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-3 py-1 text-xs font-semibold text-[var(--pawls-ink-700)] sm:px-4 sm:py-1.5 sm:text-sm">
+          {t("home.betaBadge", DEFAULT_LANG)}
         </span>
 
         <h1 className="max-w-3xl text-2xl font-extrabold tracking-tight text-gray-900 sm:text-4xl md:text-5xl">

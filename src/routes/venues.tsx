@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createVenuesTable } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
+import { t, DEFAULT_LANG } from "../lib/i18n";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -279,6 +280,9 @@ function VenuesPage() {
   const error = (data as any)?.error ?? null;
   const typeFilter = (data as any)?.type ?? null;
   const cityFilter = (data as any)?.city ?? null;
+  // Phase-1 primary language (FR) — these public pages have no inline FR|EN
+  // toggle yet; the EN strings live in the shared i18n resource files.
+  const lang = DEFAULT_LANG;
 
   // Filter chips are built from the full list; the visible list is already
   // filtered server-side from the URL query params.
@@ -295,14 +299,10 @@ function VenuesPage() {
       {/* Hero */}
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-          Dog-Friendly Places Near You 
+          {t("venues.pageTitle", lang)}
         </h1>
         <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-          Discover parks, cafés, beaches, and trails that welcome your four-legged friend with open paws.
-        </p>
-        <p className="mx-auto mt-3 max-w-lg rounded-xl bg-[var(--pawls-cream-100)] px-4 py-2 text-sm text-[var(--pawls-ink-700)]">
-          Demo venues — venue partnerships are coming soon. Ratings shown are
-          examples, not verified reviews.
+          {t("venues.pageSubtitle", lang)}
         </p>
       </section>
 
@@ -310,8 +310,8 @@ function VenuesPage() {
         <section className="bg-white px-6 pb-20">
           <div className="mx-auto max-w-6xl">
             <EmptyState
-              title="No venues available yet"
-              description="Check back soon to discover dog-friendly parks, cafés, beaches, and trails near you."
+              title={t("venues.comingSoonTitle", lang)}
+              description={t("venues.comingSoonBody", lang)}
             />
           </div>
         </section>
