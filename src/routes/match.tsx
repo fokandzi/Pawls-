@@ -1,125 +1,207 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { createMatchTables } from "../db/schema";
-import { parisDogProfiles } from "../db/dog-seed";
+import { createFileRoute, Link, Outlet, useRouterState, useSearch } from "@tanstack/react-router";
 import { seoHead, SEO } from "../lib/seo";
+import { t, normalizeLang, type Lang } from "../lib/i18n";
+import { LangToggle } from "../lib/lang-toggle";
+import { useEffect, useMemo, useState } from "react";
 
-type DogProfile = { id:number; owner_name:string; dog_name:string; breed:string; age:number; size:string; energy_level:string; temperament:string; bio:string|null; photo_url:string|null; location:string; email:string|null; instagram:string|null; tiktok:string|null; twitter:string|null; youtube:string|null };
-const sizeEmoji: Record<string,string> = {small:"🐶",medium:"🐕",large:"🦮"};
-const energyBadge: Record<string,{bg:string;text:string;label:string}> = {low:{bg:"bg-blue-100",text:"text-blue-700",label:"Low Energy"},medium:{bg:"bg-[var(--pawls-cream-100)]",text:"text-[var(--pawls-gold-500)]",label:"Medium Energy"},high:{bg:"bg-red-100",text:"text-red-700",label:"High Energy"}};
-const sizeLabel: Record<string,string> = {small:"Small",medium:"Medium",large:"Large"};
-function staticProfiles(): DogProfile[] { return parisDogProfiles.map((p,i)=>({id:1000+i,owner_name:p[0],dog_name:p[1],breed:p[2],age:p[3],size:p[4],energy_level:p[5],temperament:(p[6] as string[]).join(", "),bio:p[7],photo_url:`https://placedog.net/400/400?id=${i+1}`,location:p[8],email:null,instagram:null,tiktok:null,twitter:null,youtube:null})); }
+type DiscoveryDog = {
+  id: number; dog_name: string; breed: string; age: number | null;
+  size: string | null; energy_level: string | null; temperament: string | null;
+  bio: string | null; photo_url: string | null; location: string | null;
+  city: string | null; owner_name: string | null;
+};
 
-/** Parse comma-separated IDs from a URL search param. TanStack may auto-parse
- * values as strings, numbers, or arrays — coerce to string first. */
-function parseIds(raw: unknown): number[] {
-  if (raw == null) return [];
-  const values = Array.isArray(raw) ? raw : [raw];
-  return values
-    .flatMap((value) => String(value).split(","))
-    .map((value) => Number(value.trim()))
-    .filter((value) => Number.isSafeInteger(value) && value > 0);
-}
+const sizeEmoji: Record<string, string> = { small: "🐶", medium: "🐕", large: "🦮" };
+const sizeLabel: Record<string, { fr: string; en: string }> = {
+  small: { fr: "Petit", en: "Small" }, medium: { fr: "Moyen", en: "Medium" }, large: { fr: "Grand", en: "Large" },
+};
 
 export const Route = createFileRoute("/match")({
-  head:()=>seoHead(SEO.match),
-  loader: async (ctx:any) => {
-    const rawSearch = ctx.location?.search;
-    // Depending on the SSR entry point, search can be the router object or a
-    // raw query string. Normalize both so swipe state survives every request.
-    const search = (typeof rawSearch === "string"
-      ? Object.fromEntries(new URLSearchParams(rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch).entries())
-      : (rawSearch ?? {})) as Record<string, unknown>;
-    // Swipe state from URL params — no cookies, no client JS needed
-    const swiped = parseIds(search.swiped);
-    const liked  = parseIds(search.liked);
-    const matched = parseIds(search.matched);
-    const swipe = search.swipe === "left" || search.swipe === "right" ? search.swipe : null;
-    const target = Number(search.target)||0;
-
-    if (swipe && target) {
-      const nextSwiped = [...swiped, target];
-      const nextLiked  = swipe === "right" ? [...liked, target] : liked;
-      const nextMatched = swipe === "right" && liked.includes(target) ? [...matched, target] : matched;
-      // Return filtered profiles with updated URL state (caller includes params in links)
-      return {
-        profiles: staticProfiles().filter(p => !nextSwiped.includes(p.id)),
-        currentIndex: 0, profileId: null, matchResult: null, isPlus: false, error: "",
-        swiped: nextSwiped, liked: nextLiked, matched: nextMatched,
-        justMatched: swipe === "right" && liked.includes(target) ? target : null,
-      };
-    }
-
-    let profiles: DogProfile[] = [];
-    try { profiles = staticProfiles(); await createMatchTables(); } catch { profiles = staticProfiles(); }
-    profiles = profiles.filter(p => !swiped.includes(p.id));
-    return { profiles, currentIndex: 0, profileId: null, matchResult: null, isPlus: false, error: "", swiped, liked, matched, justMatched: null };
-  }, component: MatchPage,
+  head: () => seoHead(SEO.match),
+  component: MatchPage,
 });
 
-function buildSwipeUrl(swiped: number[], liked: number[], matched: number[], direction: string, targetId: number): string {
-  const s = swiped.join(",");
-  const l = liked.join(",");
-  const m = matched.join(",");
-  return `/match?swipe=${direction}&target=${targetId}&swiped=${s}&liked=${l}&matched=${m}`;
-}
-
-function MatchPage(){
-  // /match has child routes (/match/create, /match/matches, /match/messages/$matchId).
-  // Those children render their own full page shells, so when a child is matched
-  // render <Outlet/> instead of the swipe UI — otherwise the child (e.g. the dog
-  // profile form at /match/create) never appears and the swipe page always shows.
+function MatchPage() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (pathname.startsWith("/match/")) return <Outlet />;
-  return <div className="flex min-h-dvh flex-col"><AppHeader active="match"/><SwipeUI/><AppFooter/></div>;
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <AppHeader active="match" />
+      <SwipeUI />
+      <AppFooter />
+    </div>
+  );
 }
 
-function SwipeUI(){
- const data = Route.useLoaderData() as any;
- const profiles: DogProfile[] = data.profiles;
- const swipedNums: number[] = data.swiped || [];
- const likedNums: number[] = data.liked || [];
- const matchedNums: number[] = data.matched || [];
- const justMatched: number | null = data.justMatched || null;
+function SwipeUI() {
+  const search = (useSearch({ strict: false }) as any) ?? {};
+  const justMatched = search.justMatched === "1";
+  const [lang, setLang] = useState<Lang>("fr");
+  const [dogs, setDogs] = useState<DiscoveryDog[]>([]);
+  const [status, setStatus] = useState<"loading" | "loggedOut" | "ready" | "error">("loading");
+  const [error, setError] = useState("");
+  const [matchBanner, setMatchBanner] = useState(justMatched);
 
- if (!profiles.length) return <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20"><div className="text-center"><h2 className="text-2xl font-bold text-gray-900">No more dogs in your area</h2><p className="mt-2 text-gray-600">Check back soon — new playmates join every day!</p><Link to="/match/matches" className="mt-6 inline-flex rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 font-semibold text-white">View Your Matches</Link></div></section>;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const mineRes = await fetch("/api/match/mine", { headers: { accept: "application/json" } });
+        const mine = await mineRes.json();
+        if (cancelled) return;
+        if (!mine.user) { setStatus("loggedOut"); return; }
+        setLang(normalizeLang(mine.user.lang));
+        if (!mine.dogs.length) { setStatus("ready"); setDogs([]); return; }
+        const discRes = await fetch("/api/match/discovery", { headers: { accept: "application/json" } });
+        const disc = await discRes.json();
+        if (cancelled) return;
+        if (disc.error) { setStatus("error"); setError(disc.message ?? disc.error); return; }
+        setDogs(disc.dogs);
+        setStatus("ready");
+      } catch {
+        if (!cancelled) { setStatus("error"); setError(""); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
- const current = profiles[0];
- const energy = energyBadge[current.energy_level]??energyBadge.medium;
- const leftUrl = buildSwipeUrl(swipedNums, likedNums, matchedNums, "left", current.id);
- const rightUrl = buildSwipeUrl(swipedNums, likedNums, matchedNums, "right", current.id);
+  const current = dogs[0];
+  const L = lang;
 
- return <section className="relative flex flex-1 flex-col items-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-8">
-   {justMatched && <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-center"><span className="text-2xl">🎉</span><p className="font-bold text-emerald-700">It's a match!</p></div>}
-   <p className="mb-4 text-sm text-gray-400">1 of {profiles.length} · {swipedNums.length} swiped</p>
-   <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-lg">
-     <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-       <span className="absolute text-8xl">{sizeEmoji[current.size]??"🐶"}</span>
-       {current.photo_url&&<img src={current.photo_url} alt={current.dog_name} className="relative z-10 h-full w-full object-cover"/>}
-          <span className="absolute left-3 top-3 z-20 rounded-full bg-[var(--pawls-ink-700)] px-3 py-1 text-xs font-semibold text-white">Demo profile</span>
-     </div>
-     <div className="p-5">
-       <div className="flex items-start justify-between">
-         <div><h2 className="text-2xl font-bold text-gray-900">{current.dog_name}</h2><p className="text-sm text-gray-500">{current.breed}</p></div>
-         <span className="text-2xl font-bold text-[var(--pawls-terracotta-500)]">{current.age}y</span>
-       </div>
-       <div className="my-3 flex flex-wrap gap-2">
-         <span className="rounded-full bg-[var(--pawls-cream-50)] px-2.5 py-1 text-xs">{sizeEmoji[current.size]} {sizeLabel[current.size]}</span>
-         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${energy.bg} ${energy.text}`}>{energy.label}</span>
-         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs">{current.temperament}</span>
-       </div>
-       <p className="text-sm text-gray-500">{current.location}</p>
-       {current.bio&&<p className="mt-3 text-sm leading-relaxed text-gray-700">{current.bio}</p>}
-       <p className="mt-3 text-xs text-gray-400">Owner: {current.owner_name}</p>
-     </div>
-   </div>
-   <div className="mt-8 flex items-center gap-8">
-     {/* Plain full-navigation links: rel=external + target=_self guarantee the
-         browser performs a full page load with the swipe query params intact —
-         no router/client-side interception can drop or mangle them. */}
-     <a href={leftUrl} aria-label="Pass" rel="external" target="_self" className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-300 bg-white text-3xl text-red-400 shadow-md">✕</a>
-     <a href={rightUrl} aria-label="Like" rel="external" target="_self" className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-300 bg-white text-3xl text-emerald-400 shadow-md">♥</a>
-   </div>
-   <Link to="/match/matches" className="mt-4 text-sm text-gray-400">View matches →</Link>
- </section>;
+  if (status === "loading") {
+    return (
+      <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--pawls-cream-200)] border-t-[var(--pawls-terracotta-500)]" />
+      </section>
+    );
+  }
+  if (status === "loggedOut") {
+    return (
+      <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
+        <div className="max-w-sm text-center">
+          <span className="text-5xl">🐶</span>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">{t("match.loggedOutTitle", L)}</h2>
+          <p className="mt-2 text-gray-600">{t("match.loggedOutBody", L)}</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Link to="/login" className="inline-flex rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white">{t("match.logIn", L)}</Link>
+            <Link to="/register" className="inline-flex rounded-full border border-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-[var(--pawls-terracotta-500)]">{t("match.signUp", L)}</Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
+  if (status === "error") {
+    return (
+      <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
+        <div className="max-w-sm text-center">
+          <h2 className="text-2xl font-bold text-gray-900">{t("match.error", L)}</h2>
+          {error && <p className="mt-2 text-sm text-gray-600">{error}</p>}
+        </div>
+      </section>
+    );
+  }
+
+  if (!current) {
+    const hasDog = status === "ready" && dogs.length === 0 && (current === undefined);
+    return (
+      <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
+        <div className="max-w-sm text-center">
+          <LangToggle lang={lang} />
+          <span className="mt-4 inline-block text-5xl">🐾</span>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">{t("match.noCandidatesTitle", L)}</h2>
+          <p className="mt-2 text-gray-600">{t("match.noCandidatesBody", L)}</p>
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <Link to="/match/create" className="inline-flex rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white">{t("match.createProfile", L)}</Link>
+            <Link to="/match/matches" className="text-sm text-gray-400">{t("match.viewMatches", L)} →</Link>
+            <Link to="/match/my-dogs" className="text-sm text-gray-400">{t("match.manageDogs", L)}</Link>
+          </div>
+          {hasDog && <p className="mt-4 text-xs text-gray-400">{t("match.noDogsTitle", L)}</p>}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="relative flex flex-1 flex-col items-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-8">
+      <div className="mb-3 flex w-full max-w-sm items-center justify-between">
+        <LangToggle lang={lang} />
+        <span className="text-sm text-gray-400">{t("match.swipedCount", L).replace("{n}", "—")}</span>
+      </div>
+      {matchBanner && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
+          <p className="font-bold text-emerald-700">{t("match.itIsAMatch", L)}</p>
+          <p className="text-sm text-emerald-600">{t("match.itIsAMatchBody", L).replace("{name}", current.dog_name)}</p>
+        </div>
+      )}
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-lg">
+        <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
+          <span className="absolute text-8xl">{sizeEmoji[current.size ?? "medium"] ?? "🐶"}</span>
+          {current.photo_url && <img src={current.photo_url} alt={current.dog_name} className="relative z-10 h-full w-full object-cover" />}
+        </div>
+        <div className="p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{current.dog_name}</h2>
+              <p className="text-sm text-gray-500">{current.breed}</p>
+            </div>
+            {current.age !== null && <span className="text-2xl font-bold text-[var(--pawls-terracotta-500)]">{current.age}y</span>}
+          </div>
+          <div className="my-3 flex flex-wrap gap-2">
+            {current.size && (
+              <span className="rounded-full bg-[var(--pawls-cream-50)] px-2.5 py-1 text-xs">
+                {sizeEmoji[current.size]} {sizeLabel[current.size]?.[L] ?? current.size}
+              </span>
+            )}
+            {current.energy_level && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs">{current.energy_level}</span>}
+            {current.temperament && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs">{current.temperament}</span>}
+          </div>
+          <p className="text-sm text-gray-500">{current.location ?? current.city ?? ""}</p>
+          {current.bio && <p className="mt-3 text-sm leading-relaxed text-gray-700">{current.bio}</p>}
+          {current.owner_name && <p className="mt-3 text-xs text-gray-400">{t("match.owner", L)}: {current.owner_name}</p>}
+        </div>
+      </div>
+      <div className="mt-8 flex items-center gap-8">
+        <SwipeButton dogId={current.id} direction="pass" label={t("match.pass", L)} emoji="✕" style="border-red-300 text-red-400" lang={lang} onDone={() => setDogs((d) => d.slice(1))} />
+        <SwipeButton dogId={current.id} direction="like" label={t("match.like", L)} emoji="♥" style="border-emerald-300 text-emerald-400" lang={lang} onDone={(matchCreated) => { setDogs((d) => d.slice(1)); if (matchCreated) setMatchBanner(true); }} />
+      </div>
+      <Link to="/match/matches" className="mt-4 text-sm text-gray-400">{t("match.viewMatches", L)} →</Link>
+    </section>
+  );
+}
+
+function SwipeButton({ dogId, direction, label, emoji, style, lang, onDone }: {
+  dogId: number; direction: string; label: string; emoji: string; style: string; lang: Lang; onDone: (matchCreated: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const res = await fetch("/api/match/swipe", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ targetDogId: dogId, direction }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        onDone(!!data.matchCreated);
+      } else {
+        window.location.href = "/match";
+      }
+    } catch {
+      window.location.href = "/match";
+    }
+  }
+  return (
+    <form method="POST" action="/api/match/swipe" onSubmit={submit} className="inline-flex flex-col items-center gap-1">
+      <input type="hidden" name="targetDogId" value={dogId} />
+      <input type="hidden" name="direction" value={direction} />
+      <button type="submit" disabled={busy} aria-label={label}
+        className={`flex h-16 w-16 items-center justify-center rounded-full border-2 bg-white text-3xl shadow-md ${style} ${busy ? "opacity-50" : ""}`}>
+        {emoji}
+      </button>
+      <span className="text-xs text-gray-400">{label}</span>
+    </form>
+  );
 }

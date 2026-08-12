@@ -14,6 +14,7 @@ import handler from "./dist/server/server.js";
 import { handleRegisterPost } from "./register-handler.ts";
 import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
+import { handleMatchApi } from "./match-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 const fetchHandler = handler as {
@@ -108,6 +109,22 @@ export default async function vercelHandler(
       waitlistRes.headers.forEach((value, key) => res.setHeader(key, value));
       if (waitlistRes.body) {
         const reader = waitlistRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+    // Real Match API (GET + POST /api/match/*) — handled pre-SSR.
+    if (new URL(request.url).pathname.startsWith("/api/match/")) {
+      const matchRes = await handleMatchApi(request);
+      res.statusCode = matchRes.status;
+      matchRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (matchRes.body) {
+        const reader = matchRes.body.getReader();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;

@@ -15,6 +15,7 @@ import { handleStripeWebhook } from "./webhook-handler.ts";
 import { handleRegisterPost } from "./register-handler.ts";
 import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
+import { handleMatchApi } from "./match-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
@@ -69,6 +70,11 @@ for (let attempt = 1; ; attempt++) {
         // before the SSR handler, same as POST /register.
         if (req.method === "POST" && pathname === "/match/create") {
           return handleMatchCreatePost(req);
+        }
+        // Real Match API (GET + POST /api/match/*) — handled pre-SSR so the
+        // JSON endpoints never fall through to the SSR HTML handler.
+        if (pathname.startsWith("/api/match/")) {
+          return handleMatchApi(req);
         }
 
         // Native POST /api/waitlist — landing-page waitlist form posts here.

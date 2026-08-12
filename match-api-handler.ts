@@ -155,6 +155,8 @@ export async function handleMatchApi(request: Request): Promise<Response> {
       try {
         const result = await editDog(sessionUser.id, dogId, body);
         if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+        const next = String(body.next ?? "").trim();
+        if (next && next.startsWith("/")) return new Response(null, { status: 302, headers: { Location: next, "Cache-Control": NO_STORE } });
         return json({ ok: true });
       } catch (err) {
         console.error("[match-api] dog edit failed", err);
@@ -174,6 +176,8 @@ export async function handleMatchApi(request: Request): Promise<Response> {
       try {
         const result = await deleteDog(sessionUser.id, dogId);
         if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+        const next = String(body.next ?? "").trim();
+        if (next && next.startsWith("/")) return new Response(null, { status: 302, headers: { Location: next, "Cache-Control": NO_STORE } });
         return json({ ok: true });
       } catch (err) {
         console.error("[match-api] dog delete failed", err);
@@ -191,6 +195,11 @@ export async function handleMatchApi(request: Request): Promise<Response> {
       try {
         const ok = await setUserLanguage(sessionUser.id, lang);
         if (!ok) return badJson("lang must be 'fr' or 'en'");
+        const next = String(body.next ?? "").trim();
+        if (next && (next.startsWith("/") || next.startsWith("http://localhost:3000") || next.startsWith("https://pawls.club"))) {
+          const target = next.startsWith("http") ? new URL(next).pathname + new URL(next).search : next;
+          return new Response(null, { status: 302, headers: { Location: target, "Cache-Control": NO_STORE } });
+        }
         return json({ ok: true, lang });
       } catch (err) {
         console.error("[match-api] lang failed", err);

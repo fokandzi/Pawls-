@@ -88,7 +88,7 @@ export const createMatchTables = createServerFn({ method: "POST" }).handler(
         target_profile_id INTEGER REFERENCES dog_profiles(id),
         direction TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(swiper_profile_id, target_profile_id)
+        CONSTRAINT swipes_unique_swiper_target_direction UNIQUE (swiper_profile_id, target_profile_id, direction)
       )
     `;
 
@@ -98,7 +98,11 @@ export const createMatchTables = createServerFn({ method: "POST" }).handler(
         profile_id_1 INTEGER REFERENCES dog_profiles(id),
         profile_id_2 INTEGER REFERENCES dog_profiles(id),
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(profile_id_1, profile_id_2)
+        state TEXT DEFAULT 'active' CHECK (state IN ('active','unmatched')),
+        unmatched_at TIMESTAMPTZ,
+        created_by_system BOOLEAN DEFAULT false,
+        CONSTRAINT matches_profiles_unique UNIQUE (profile_id_1, profile_id_2),
+        CONSTRAINT matches_profile_order_check CHECK (profile_id_1 < profile_id_2)
       )
     `;
 

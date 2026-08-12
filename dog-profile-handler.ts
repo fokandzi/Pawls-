@@ -20,8 +20,6 @@
 import { sql } from "./src/db";
 import { getSessionUser } from "./src/lib/auth/session";
 import { assertSameOrigin } from "./src/lib/auth/csrf";
-import { getSessionUser } from "./src/lib/auth/session";
-import { assertSameOrigin } from "./src/lib/auth/csrf";
 
 const REQUIRED_FIELDS = [
   "ownerName",
@@ -187,7 +185,7 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
   try {
     await ensureDogProfilesTable();
     const [row] = await sql()`
-      INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, bio, photo_url, location, email, instagram, tiktok, twitter, youtube, user_id)
+      INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, bio, photo_url, location, email, instagram, tiktok, twitter, youtube, user_id, country, source)
       VALUES (
         ${fields.ownerName},
         ${fields.dogName},
@@ -204,7 +202,9 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
         ${fields.tiktok || null},
         ${fields.twitter || null},
         ${fields.youtube || null},
-        ${sessionUser.id}
+        ${sessionUser.id},
+        'FR',
+        'user'
       )
       RETURNING id
     `;

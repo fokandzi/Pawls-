@@ -8,8 +8,8 @@
  *   users). Full-site i18n is its own phase; only Match-critical strings are
  *   covered here.
  */
-import { fr } from "./i18n/fr";
-import { en } from "./i18n/en";
+import { fr } from "./fr";
+import { en } from "./en";
 
 export type Lang = "fr" | "en";
 export const LANGS: Lang[] = ["fr", "en"];
