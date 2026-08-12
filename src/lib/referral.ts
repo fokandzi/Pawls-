@@ -46,13 +46,13 @@ export function hasClaimedReward(): boolean {
   return localStorage.getItem(REWARD_CLAIMED_KEY) === "true";
 }
 
-/** Mark the referral reward as claimed and activate Pawls Plus. */
-export function claimReward(): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(REWARD_CLAIMED_KEY, "true");
-  // Grant 1 free month of Pawls Plus
-  localStorage.setItem("pawnder-plus", "true");
-}
+/**
+ * P0-A security stopgap: the old claimReward() wrote localStorage["pawnder-plus"]
+ * = "true", letting any visitor self-grant Pawls Plus client-side. Removed —
+ * nothing may self-grant Plus client-side, ever. Referral rewards (including
+ * Plus) are not sold/live yet; they will be granted server-side after the auth
+ * phase, based on verified referrals.
+ */
 
 /** Read the URL param ?ref=CODE and store it. Returns the code if newly stored. */
 export function captureRefFromURL(): string | null {

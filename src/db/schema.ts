@@ -78,6 +78,9 @@ export const createMatchTables = createServerFn({ method: "POST" }).handler(
     await ensureSocialColumnsInternal();
     await sql()`ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS temperament_tags TEXT[] DEFAULT ARRAY[]::TEXT[]`;
     await sql()`ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS distance_km NUMERIC(5,1)`;
+    // P0-A: demo flag — only seed-marked profiles may appear in public demo feeds
+    // (e.g. /viral). Real/test/staff profiles must never leak into public discovery.
+    await sql()`ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT false`;
 
     await sql()`
       CREATE TABLE IF NOT EXISTS swipes (
@@ -160,37 +163,29 @@ export const updateDogSocialLinks = createServerFn({ method: "POST" })
   });
 
 /**
- * Checks whether a given email has an active Pawls Plus subscription.
+ * Account deletion — DISABLED (P0 security stopgap, phase P0-A).
+ *
+ * The previous implementation had NO authentication or ownership check: any
+ * unauthenticated visitor could POST a forged numeric profile id and get
+ * `{success:true}` while the handler deleted that profile's swipes, matches,
+ * messages and the profile itself. Until the real auth phase lands (signed
+ * identity cookie + ownership verification), the endpoint is hard-disabled:
+ * every request gets a non-success response and NO database write happens.
+ * The settings UI button is dead today anyway (hydration bug); the honest
+ * "coming soon" copy will surface once hydration is fixed.
  */
 export const deleteAccount = createServerFn({ method: "POST" })
   .validator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("Account identifier required");
-    const d = data as Record<string, unknown>;
-    return { profileId: typeof d.profileId === "number" ? d.profileId : null, email: typeof d.email === "string" ? d.email.trim().toLowerCase() : null };
+    // Accept anything (or nothing) so every possible payload shape reaches the
+    // disabled handler below and is answered with the same non-success result.
+    return { profileId: null, email: null };
   })
-  .handler(async ({ data }) => {
-    if (!data.profileId && !data.email) return { success: false, error: "Account identifier required" };
-    try {
-      await createMatchTables();
-      const db = sql();
-      let ids: number[] = data.profileId ? [data.profileId] : [];
-      if (!ids.length && data.email) {
-        const rows = await db`SELECT id FROM dog_profiles WHERE lower(email) = ${data.email}`;
-        ids = rows.map((r: any) => Number(r.id));
-      }
-      for (const id of ids) {
-        await db`DELETE FROM messages WHERE sender_profile_id = ${id} OR receiver_profile_id = ${id}`.catch(() => []);
-        await db`DELETE FROM matches WHERE profile_id_1 = ${id} OR profile_id_2 = ${id}`.catch(() => []);
-        await db`DELETE FROM swipes WHERE swiper_profile_id = ${id} OR target_profile_id = ${id}`.catch(() => []);
-        await db`DELETE FROM dog_profiles WHERE id = ${id}`;
-      }
-      if (data.email) {
-        await db`DELETE FROM subscriptions WHERE lower(email) = ${data.email}`.catch(() => []);
-        await db`DELETE FROM referrals WHERE lower(referred_email) = ${data.email}`.catch(() => []);
-        await db`DELETE FROM bookings WHERE lower(customer_email) = ${data.email}`.catch(() => []);
-      }
-      return { success: true };
-    } catch (error) { console.error("[account deletion]", error); return { success: false, error: "Unable to delete account" }; }
+  .handler(async () => {
+    return {
+      success: false,
+      code: "ACCOUNT_DELETION_UNAVAILABLE",
+      error: "Account deletion unavailable — coming soon",
+    };
   });
 
 export const checkSwipeAllowance = createServerFn({ method: "POST" })
@@ -484,7 +479,9 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
       )
     `;
 
-    // Count right-swipes per Plus dog in the last 7 days
+    // Count right-swipes per Plus dog in the last 7 days.
+    // Public demo feed: ONLY seed-marked (is_demo) profiles may appear — real
+    // profiles (including test/staff) must never leak into public discovery.
     const trending = await sql()`
       SELECT
         dp.id,
@@ -504,6 +501,7 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
         AND s.direction = 'right'
         AND s.created_at >= NOW() - INTERVAL '7 days'
       WHERE sub.status = 'active'
+        AND dp.is_demo = true
       GROUP BY dp.id, dp.dog_name, dp.breed, dp.photo_url, dp.location, dp.owner_name, dp.instagram, dp.tiktok, dp.twitter, dp.youtube
       ORDER BY swipe_count DESC, dp.created_at DESC
       LIMIT 20
@@ -519,6 +517,8 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
 
     // Fallback: keep Viral Paws useful before the first Plus subscriber exists.
     // Profiles are public discovery content; Plus remains the feature/boost entitlement.
+    // Restricted to seed-marked demo profiles only (see comment above) so real
+    // test/staff profiles never appear in the public feed.
     const fallback = await sql()`
       SELECT
         dp.id,
@@ -533,7 +533,7 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
         dp.youtube,
         0 AS swipe_count
       FROM dog_profiles dp
-      WHERE dp.email IS NULL OR dp.email IS NOT NULL
+      WHERE dp.is_demo = true
       ORDER BY dp.created_at DESC
       LIMIT 20
     `;

@@ -111,7 +111,8 @@ function ChatPage() {
         const id = parseInt(stored, 10);
         if (!isNaN(id)) setProfileId(id);
       }
-      if (localStorage.getItem("pawnder-plus") === "true") setIsPlus(true);
+      // P0-A: removed localStorage["pawnder-plus"] read — no client-side Plus
+      // entitlement. Plus is not for sale; it will be server-verified post-auth.
     }
   }, []);
 

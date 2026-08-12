@@ -1,7 +1,7 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getReferralCode, getReferralLink, getReferredBy, hasClaimedReward, claimReward } from "../lib/referral";
+import { getReferralCode, getReferralLink, getReferredBy, hasClaimedReward } from "../lib/referral";
 import { getReferralCount } from "../db/schema";
 import { seoHead, SEO } from "../lib/seo";
 import { trackEvent } from "../lib/analytics"
@@ -24,7 +24,6 @@ function InvitePage() {
   const [loading, setLoading] = useState(true);
   const [referredBy, setReferredBy] = useState<string | null>(null);
   const [rewardClaimed, setRewardClaimed] = useState(true);
-  const [claimingReward, setClaimingReward] = useState(false);
 
   useEffect(() => {
     const code = getReferralCode();
@@ -62,14 +61,6 @@ function InvitePage() {
       trackEvent("referral_link_copied");
       setTimeout(() => setCopied(false), 2000);
     }
-  };
-
-  const handleClaimReward = () => {
-    setClaimingReward(true);
-    claimReward();
-    setRewardClaimed(true);
-    // Brief delay to show the animation
-    setTimeout(() => setClaimingReward(false), 1500);
   };
 
   return (
@@ -203,7 +194,8 @@ function InvitePage() {
         </div>
       </section>
 
-      {/* Claim Reward Section (if referred by someone) */}
+      {/* Referred by someone — info only (P0-A: claim button removed; no
+          client-side Plus self-grant. Rewards are server-side, post-auth.) */}
       {referredBy && !rewardClaimed && (
         <section className="bg-gradient-to-r from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)] px-6 py-16">
           <div className="mx-auto max-w-lg text-center">
@@ -215,20 +207,6 @@ function InvitePage() {
               A friend invited you to Pawls. Welcome! Referral rewards are
               coming soon — we'll email you when they launch.
             </p>
-            <button
-              onClick={handleClaimReward}
-              disabled={claimingReward}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--pawls-terracotta-500)] px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-[var(--pawls-terracotta-500)]/25 transition-all hover:bg-[var(--pawls-terracotta-700)] disabled:opacity-70"
-            >
-              {claimingReward ? (
-                <>
-                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Activating...
-                </>
-              ) : (
-                " 🐾 Rewards coming soon"
-              )}
-            </button>
           </div>
         </section>
       )}

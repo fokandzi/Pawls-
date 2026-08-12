@@ -27,14 +27,17 @@ export async function ensureDogProfilesSeeded() {
     for (const [index, p] of parisDogProfiles.entries()) {
       const photoUrl = `https://placedog.net/500/500?id=${index + 1}`;
       await sql()`UPDATE dog_profiles SET photo_url = ${photoUrl} WHERE dog_name = ${p[1]} AND photo_url IS NULL`;
+      // P0-A: mark the seed profiles as demo so public feeds (e.g. /viral) can
+      // filter to them exclusively — real/test/staff profiles must not leak.
+      await sql()`UPDATE dog_profiles SET is_demo = true WHERE dog_name = ${p[1]} AND owner_name = ${p[0]}`;
     }
     return 0;
   }
   for (const [index, p] of parisDogProfiles.entries()) {
     const photoUrl = `https://placedog.net/500/500?id=${index + 1}`;
     await sql()`INSERT INTO dog_profiles
-      (owner_name,dog_name,breed,age,size,energy_level,temperament,temperament_tags,bio,location,distance_km,photo_url)
-      VALUES (${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6][0]},${p[6]},${p[7]},${p[8]},${p[9]},${photoUrl})`;
+      (owner_name,dog_name,breed,age,size,energy_level,temperament,temperament_tags,bio,location,distance_km,photo_url,is_demo)
+      VALUES (${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6][0]},${p[6]},${p[7]},${p[8]},${p[9]},${photoUrl},true)`;
   }
   return parisDogProfiles.length;
 }
