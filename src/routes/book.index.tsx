@@ -66,9 +66,14 @@ import { seoHead, SEO } from "../lib/seo";
 const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
   await createBookingTables();
   try {
+    // P0 Data: REAL providers only — seeded/demo rows never appear as supply,
+    // and only approved providers are bookable. There are none yet, so the
+    // page shows the honest "coming soon" state.
     const rows = (await sql()`
       SELECT id, name, category, description, location, image_url, rating, review_count
-      FROM providers ORDER BY rating DESC
+      FROM providers
+      WHERE is_demo = false AND approval_status = 'approved'
+      ORDER BY rating DESC
     `) as Provider[];
     return { providers: rows, error: null };
   } catch {
@@ -93,7 +98,8 @@ function BookPage() {
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
               Find and book trusted walkers, groomers, sitters, trainers, and vets
-              near you.
+              near you. Online booking is coming soon — approved providers will
+              appear here.
             </p>
           </section>
 
@@ -114,8 +120,8 @@ function BookPage() {
             <div className="mx-auto max-w-6xl">
               {error || !providers || providers.length === 0 ? (
                 <EmptyState
-                  title="No providers available yet"
-                  description="Check back soon for trusted walkers, groomers, sitters, trainers, and vets near you."
+                  title="Bookings coming soon"
+                  description="We're onboarding trusted walkers, groomers, sitters, trainers, and vets. Providers joining soon — be the first to list your business."
                 />
               ) : (
                 /* Provider cards grid */
@@ -158,18 +164,20 @@ function BookPage() {
                           {provider.name}
                         </h3>
 
-                        {/* Rating */}
-                        <div className="mb-2 flex items-center gap-1">
-                          <span className="text-sm font-medium text-[var(--pawls-cream-50)]0">
-                            {renderStars(provider.rating)}
-                          </span>
-                          <span className="text-sm font-semibold text-gray-700">
-                            {Number(provider.rating).toFixed(1)}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            ({provider.review_count} reviews)
-                          </span>
-                        </div>
+                        {/* Rating — only from real reviews (none exist yet). */}
+                        {Number(provider.review_count) > 0 && (
+                          <div className="mb-2 flex items-center gap-1">
+                            <span className="text-sm font-medium text-[var(--pawls-cream-50)]0">
+                              {renderStars(provider.rating)}
+                            </span>
+                            <span className="text-sm font-semibold text-gray-700">
+                              {Number(provider.rating).toFixed(1)}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              ({provider.review_count} reviews)
+                            </span>
+                          </div>
+                        )}
 
                         {/* Description excerpt */}
                         <p className="line-clamp-3 text-sm leading-relaxed text-gray-600">

@@ -1,4 +1,5 @@
 import { sql } from "../db";
+import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 export const parisDogProfiles = [
   ["Camille Martin","Max","Golden Retriever",3,"large","high",["friendly","playful"],"Max loves swimming and making every dog his best friend.","Paris 11e",2.1],
@@ -22,6 +23,8 @@ export const parisDogProfiles = [
 ] as const;
 
 export async function ensureDogProfilesSeeded() {
+  // P0 Data: demo dog profiles must never be (re)inserted into production.
+  assertNotProductionSeeding("dog-seed.ts ensureDogProfilesSeeded");
   const [count] = await sql()`SELECT COUNT(*)::int AS count FROM dog_profiles`;
   if (Number(count?.count) > 0) {
     for (const [index, p] of parisDogProfiles.entries()) {

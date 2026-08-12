@@ -96,6 +96,7 @@ function SwipeUI(){
      <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
        <span className="absolute text-8xl">{sizeEmoji[current.size]??"🐶"}</span>
        {current.photo_url&&<img src={current.photo_url} alt={current.dog_name} className="relative z-10 h-full w-full object-cover"/>}
+          <span className="absolute left-3 top-3 z-20 rounded-full bg-[var(--pawls-ink-700)] px-3 py-1 text-xs font-semibold text-white">Demo profile</span>
      </div>
      <div className="p-5">
        <div className="flex items-start justify-between">

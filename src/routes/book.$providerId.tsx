@@ -91,7 +91,7 @@ const getProviderDetail = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       await createBookingTables();
-      const [provider] = await sql()`SELECT id, name, category, description, location, image_url, rating, review_count FROM providers WHERE id = ${data.providerId}`;
+      const [provider] = await sql()`SELECT id, name, category, description, location, image_url, rating, review_count FROM providers WHERE id = ${data.providerId} AND is_demo = false AND approval_status = 'approved'`;
       if (!provider) return { provider: null, services: [], error: "Provider not found" };
       const services = await sql()`SELECT id, name, price_cents, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
       return { provider: provider as Provider, services, error: null };
@@ -262,11 +262,14 @@ function ProviderDetailPage() {
                 <span className="text-sm text-gray-400"> {provider.location}</span>
               </div>
               <h1 className="text-2xl font-extrabold text-gray-900 sm:text-3xl">{provider.name}</h1>
+              {/* P0 Data: ratings only from real reviews (none exist yet). */}
+              {Number(provider.review_count) > 0 && (
               <div className="mt-2 flex items-center gap-1">
                 <span className="text-lg font-medium text-[var(--pawls-cream-50)]0">{renderStars(provider.rating)}</span>
                 <span className="text-lg font-semibold text-gray-700">{Number(provider.rating).toFixed(1)}</span>
                 <span className="text-sm text-gray-400">({provider.review_count} reviews)</span>
               </div>
+              )}
             </div>
           </div>
         </div>

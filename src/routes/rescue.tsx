@@ -5,6 +5,7 @@ import { useState } from "react";
 import { sql } from "../db";
 import { createRescueTables } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
+import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -349,6 +350,9 @@ export function staticRescueDogs(): StaticRescueDog[] {
 
 const seedRescueData = createServerFn({ method: "POST" }).handler(async () => {
   await createRescueTables();
+  // P0 Data: fixture shelters/dogs must never be inserted (or, worse, wiped
+  // via the DELETE path below) against the production database.
+  assertNotProductionSeeding("rescue.tsx seedRescueData");
 
   // Check if already seeded
   const [dogCount] = await sql()`SELECT COUNT(*)::int AS count FROM rescue_dogs`;
@@ -382,25 +386,9 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
   try {
     await createRescueTables();
 
-    // Auto-seed if empty
-    const [dogCount] = await sql()`SELECT COUNT(*)::int AS count FROM rescue_dogs`;
-    if (Number(dogCount.count) === 0) {
-      for (const s of seedShelters) {
-        const [shelter] = await sql()`
-          INSERT INTO shelters (name, location, description, phone, email, website)
-          VALUES (${s.name}, ${s.location}, ${s.description}, ${s.phone}, ${s.email}, ${s.website})
-          RETURNING id
-        `;
-        if (shelter) {
-          for (const d of s.dogs) {
-            await sql()`
-              INSERT INTO rescue_dogs (shelter_id, name, breed, age, size, gender, description, good_with_dogs, good_with_kids, good_with_cats, urgent, photo_url)
-              VALUES (${shelter.id}, ${d.name}, ${d.breed}, ${d.age}, ${d.size}, ${d.gender}, ${d.description}, ${d.good_with_dogs}, ${d.good_with_kids}, ${d.good_with_cats}, ${d.urgent}, ${d.photo_url || null})
-            `;
-          }
-        }
-      }
-    }
+    // P0 Data: no auto-seeding from page views. Rescue waits for real
+    // shelter partnerships — demo shelters/dogs are marked is_demo=true and
+    // are never presented as adoptable supply.
 
     const rows = await sql()`
       SELECT 
@@ -411,17 +399,14 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
         s.email AS shelter_email, s.phone AS shelter_phone
       FROM rescue_dogs d
       JOIN shelters s ON d.shelter_id = s.id
+      WHERE s.is_demo = false
       ORDER BY d.urgent DESC, d.created_at DESC
     `;
 
-    // Fall back to deterministic static data when the DB is unreachable or empty.
-    if (!rows || rows.length === 0) {
-      return { dogs: staticRescueDogs() as unknown as RescueDog[], error: null };
-    }
-
+    // Honest empty state: no real shelter partnerships yet.
     return { dogs: rows as RescueDog[], error: null };
   } catch {
-    return { dogs: staticRescueDogs() as unknown as RescueDog[], error: null };
+    return { dogs: [], error: "Database not connected" };
   }
 });
 
@@ -521,12 +506,12 @@ function RescuePage() {
               Find Your Forever Friend 🐾
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-              Browse rescue dog profiles from shelters across the Paris region.
-              Every dog deserves a loving home — could yours be the one?
+              Rescue dog profiles from shelters and rescues across the Paris
+              region will appear here. Every dog deserves a loving home.
             </p>
             <p className="mx-auto mt-3 max-w-lg rounded-xl bg-[var(--pawls-cream-100)] px-4 py-2 text-sm text-[var(--pawls-ink-700)]">
-              Demo listings — live shelter partnerships are coming soon.
-              Contact details are hidden until shelters join Pawls.
+              Adoptions are coming soon — we're onboarding real shelter
+              partnerships. No adoptions can be started yet.
             </p>
           </section>
 
@@ -534,8 +519,8 @@ function RescuePage() {
             <section className="bg-white px-6 pb-20">
               <div className="mx-auto max-w-6xl">
                 <EmptyState
-                  title="No rescue dogs available yet"
-                  description="Shelters are adding adoptable dogs all the time. Check back soon."
+                  title="Adoptions coming soon"
+                  description="We're onboarding real shelters and rescues in your area. Dogs will appear here as soon as a shelter joins Pawls."
                 />
               </div>
             </section>

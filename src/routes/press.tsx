@@ -62,10 +62,10 @@ function PressPage() {
             </h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { label: "Active Users", value: "10,000+", icon: "" },
-                { label: "Dog Matches Made", value: "50,000+", icon: "" },
-                { label: "Service Providers", value: "200+", icon: "" },
-                { label: "Rescue Dogs Listed", value: "500+", icon: "" },
+                { label: "Active Users", value: "Private beta", icon: "" },
+                { label: "Dog Matches", value: "Launching soon", icon: "" },
+                { label: "Service Providers", value: "Joining soon", icon: "" },
+                { label: "Rescue Partnerships", value: "Coming soon", icon: "" },
               ].map((stat) => (
                 <div
                   key={stat.label}

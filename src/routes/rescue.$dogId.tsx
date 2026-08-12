@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createRescueTables } from "../db/schema";
-import { staticRescueDogs } from "./rescue";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,25 +51,15 @@ const getDogDetail = createServerFn({ method: "GET" })
           s.website AS shelter_website
         FROM rescue_dogs d
         JOIN shelters s ON d.shelter_id = s.id
-        WHERE d.id = ${data.dogId}
+        WHERE d.id = ${data.dogId} AND s.is_demo = false
       `;
 
       if (!dog) {
-        // Fall back to deterministic static data (works without a database).
-        const staticDog = staticRescueDogs().find((d) => d.id === data.dogId);
-        if (staticDog) {
-          return { dog: staticDog as RescueDogDetail, error: null };
-        }
         return { dog: null, error: "Dog not found" };
       }
 
       return { dog: dog as RescueDogDetail, error: null };
     } catch {
-      // Database unreachable (e.g. Vercel SSR) — serve the static dog instead.
-      const staticDog = staticRescueDogs().find((d) => d.id === data.dogId);
-      if (staticDog) {
-        return { dog: staticDog as RescueDogDetail, error: null };
-      }
       return { dog: null, error: "Database not connected" };
     }
   });

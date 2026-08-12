@@ -270,9 +270,14 @@ const categoryConfig: Record<string, { label: string; emoji: string; bg: string;
 const getConnectData = createServerFn({ method: "POST" }).handler(async () => {
   await createConnectTables();
 
-  // Auto-seed if no groups exist
+  // P0 Data: fixture groups/events are demo-only and must never be inserted
+  // into production (page views never seed).
+  const isProd =
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL_ENV === "production" ||
+    process.env.PROD_SEED_GUARD === "1";
   const [groupCount] = await sql()`SELECT COUNT(*)::int AS count FROM connect_groups`;
-  if (Number(groupCount.count) === 0) {
+  if (!isProd && Number(groupCount.count) === 0) {
     for (const g of seedGroups) {
       const [group] = await sql()`
         INSERT INTO connect_groups (name, description, location, category, member_count, image_url)
@@ -485,7 +490,7 @@ function ConnectPage() {
 
                           <div className="mb-3 flex items-center gap-4 text-xs text-gray-500">
                             <span> {g.location}</span>
-                            <span> {g.member_count} members</span>
+                            <span>Community group</span>
                           </div>
 
                           {/* Upcoming events for this group */}
@@ -499,7 +504,7 @@ function ConnectPage() {
                                   <span className="font-medium">{ev.title}</span> —{" "}
                                   {formatDate(ev.event_date)} at {formatTime(ev.start_time)}
                                   <span className="ml-1 text-gray-400">
-                                    ({ev.attendee_count} going)
+                                    (Community event)
                                   </span>
                                 </div>
                               ))}
@@ -577,7 +582,7 @@ function ConnectPage() {
                             </p>
                             <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                               <span> {ev.location}</span>
-                              <span> {ev.attendee_count} attending</span>
+                              <span>Community event</span>
                             </div>
                           </div>
 

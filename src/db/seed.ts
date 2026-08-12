@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createBookingTables, createMatchTables } from "./schema";
+import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 const providers = [
   {
@@ -126,6 +127,8 @@ for (let i = providers.length; i < 12; i++) {
  */
 export const seedProviders = createServerFn({ method: "POST" }).handler(
   async () => {
+    // P0 Data: fixtures must never be inserted into production.
+    assertNotProductionSeeding("seed.ts seedProviders");
     // Ensure tables exist
     await createBookingTables();
 

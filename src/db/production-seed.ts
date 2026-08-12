@@ -1,7 +1,12 @@
 import { neon } from "@neondatabase/serverless";
+import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is required");
+// P0 Data: this script fabricates providers/breeders/shelters/venues with fake
+// review counts, 'verified' status and fictional shelters — it must NEVER run
+// against the production database.
+assertNotProductionSeeding("production-seed.ts");
 const sql = neon(url);
 
 const paris = ["Paris 5e", "Paris 6e", "Paris 9e", "Paris 11e", "Paris 15e", "Paris 16e", "Boulogne-Billancourt", "Montreuil", "Vincennes", "Saint-Denis", "Neuilly-sur-Seine", "Versailles"];

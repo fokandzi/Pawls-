@@ -214,20 +214,11 @@ const getVenues = createServerFn({ method: "POST" }).handler(async () => {
   try {
     await createVenuesTable();
 
-    // Auto-seed if empty
-    const [countRow] = await sql()`SELECT COUNT(*)::int AS count FROM venues`;
-    if (Number(countRow.count) === 0) {
-      for (const v of seedVenues) {
-            await sql()`
-              INSERT INTO venues (name, type, address, city, lat, lng, description, dog_features, rating, image_url)
-              VALUES (${v.name}, ${v.type}, ${v.address}, ${v.city}, ${v.lat}, ${v.lng}, ${v.description}, ${v.dog_features}, ${v.rating}, ${venueImage(v)})
-            `;
-      }
-    }
-
+    // P0 Data: no auto-seeding from page views (fixture venues are demo-only).
     const rows = await sql()`
       SELECT id, name, type, address, city, lat, lng, description, dog_features, rating, image_url
       FROM venues
+      WHERE is_demo = false
       ORDER BY 
         CASE type WHEN 'park' THEN 1 WHEN 'beach' THEN 2 WHEN 'trail' THEN 3 WHEN 'cafe' THEN 4 WHEN 'bar' THEN 5 ELSE 6 END,
         rating DESC
@@ -235,17 +226,7 @@ const getVenues = createServerFn({ method: "POST" }).handler(async () => {
     // Preserve image_url from DB if present; always compute photo_url for map tiles.
     return { venues: (rows as Venue[]).map((v) => ({ ...v, image_url: v.image_url || venueImage(v), photo_url: venuePhoto(v) })), error: null };
   } catch {
-    // SSR must remain useful when Neon is unavailable on a serverless render.
-    // The same static venue catalogue powers the map grid and cards.
-    return {
-      venues: seedVenues.map((v, i) => ({
-            ...v,
-            id: i + 1,
-            image_url: venueImage(v),
-            photo_url: venuePhoto(v),
-          })) as Venue[],
-      error: null,
-    };
+    return { venues: [], error: "Database not connected" };
   }
 });
 

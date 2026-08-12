@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createBreedTables } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
+import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 // ── Seed data ──────────────────────────────────────────────────────────────
 
@@ -202,6 +203,7 @@ type Breeder = {
   years_experience: number;
   health_testing: string;
   image_url: string | null;
+  is_demo: boolean;
 };
 
 const ensureBreedTables = createServerFn({ method: "POST" }).handler(async () => {
@@ -211,6 +213,8 @@ const ensureBreedTables = createServerFn({ method: "POST" }).handler(async () =>
 
 const seedBreedersFn = createServerFn({ method: "POST" }).handler(async () => {
   await createBreedTables();
+  // P0 Data: fixtures must never be inserted into production.
+  assertNotProductionSeeding("breed.tsx seedBreedersFn");
 
   const [existing] = await sql()`SELECT COUNT(*)::int AS count FROM breeders`;
   if (Number(existing.count) > 0) {
@@ -241,28 +245,12 @@ const getBreeders = createServerFn({ method: "GET" }).handler(async () => {
   try {
     await createBreedTables();
 
-    // Auto-seed if empty
-    const [countRow] = await sql()`SELECT COUNT(*)::int AS count FROM breeders`;
-    if (Number(countRow.count) === 0) {
-      for (const b of seedBreeders) {
-        const [breeder] = await sql()`
-          INSERT INTO breeders (name, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing)
-          VALUES (${b.name}, ${b.location}, ${b.description}, ${b.breed_specialty}, ${b.verification_status}, ${b.membership_tier}, ${b.years_experience}, ${b.health_testing})
-          RETURNING id
-        `;
-        if (breeder) {
-          for (const l of b.litters) {
-            await sql()`
-              INSERT INTO litters (breeder_id, breed, birth_date, available_count, total_count, price_cents, health_tests, description)
-              VALUES (${breeder.id}, ${l.breed}, ${l.birth_date}::date, ${l.available_count}, ${l.total_count}, ${l.price_cents}, ${l.health_tests}, ${l.description})
-            `;
-          }
-        }
-      }
-    }
+    // P0 Data: no auto-seeding from page views. Demo fixture breeders are
+    // clearly badged as "Demo listing" below; real breeders will appear here
+    // once breeder onboarding + verification ship.
 
     const rows = await sql()`
-      SELECT id, name, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing, image_url
+      SELECT id, name, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing, image_url, is_demo
       FROM breeders
       ORDER BY 
         CASE membership_tier WHEN 'premium' THEN 1 WHEN 'plus' THEN 2 ELSE 3 END,
@@ -429,7 +417,9 @@ function BreedPage() {
                   {/* Cards grid */}
                   <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                     {breeders.map((breeder) => {
-                      const mb = membershipBadge(breeder.membership_tier);
+                      // P0 Data: membership tier badges are fabricated for
+                      // fixture rows — only show them for real breeders.
+                      const mb = breeder.is_demo ? null : membershipBadge(breeder.membership_tier);
                       const vb = verificationBadge(breeder.verification_status);
                       const emoji = breederEmoji(breeder.breed_specialty);
 

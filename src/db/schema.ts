@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { ensureDogProfilesSeeded } from "./dog-seed";
 
 /**
  * Creates the booking marketplace tables (IF NOT EXISTS).
@@ -463,8 +462,9 @@ export const getReferralCount = createServerFn({ method: "GET" })
 export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
   async () => {
     await createMatchTables();
-    // Seed discoverable dogs on first visit so Viral Paws is never blank.
-    await ensureDogProfilesSeeded();
+    // P0 Data: no seeding from public page views - demo dog profiles already
+    // exist and are marked is_demo=true. Fixture writes are guarded against
+    // production (see assertNotProductionSeeding in dog-seed.ts).
 
     // Ensure subscriptions table exists
     await sql()`
