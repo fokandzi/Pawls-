@@ -69,4 +69,15 @@ curl -sf -X PATCH "https://api.vercel.com/v9/projects/${PROJECT_NAME}${TEAM_QS}"
   -d '{"ssoProtection":null}' >/dev/null ||
   echo "warning: could not disable SSO protection (site may show a login wall)" >&2
 
-echo "LIVE: $LIVE_URL"
+# pawls.club is NOT a domain of this Vercel project — the production URL only
+# reaches pawls.club through this explicit alias. Without it, a "successful"
+# deploy silently leaves the live site on the old build, so alias failure is
+# deploy failure (P0-B pipeline hardening).
+echo "==> aliasing $LIVE_URL -> pawls.club"
+ALIAS_OUT="$($VERCEL alias "$LIVE_URL" pawls.club --yes --token "$VERCEL_TOKEN" "${SCOPE_ARGS[@]}" 2>&1)" || {
+  printf '%s\n' "$ALIAS_OUT" >&2
+  echo "FATAL: deploy succeeded but the pawls.club alias FAILED — the live site was NOT updated" >&2
+  exit 1
+}
+echo "$ALIAS_OUT" | tail -4
+echo "LIVE: $LIVE_URL (aliased to https://pawls.club)"
