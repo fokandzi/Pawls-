@@ -65,7 +65,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <Scripts />
         <script
           dangerouslySetInnerHTML={{
-            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`,
+            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }); }`,
           }}
         />
       </body>
