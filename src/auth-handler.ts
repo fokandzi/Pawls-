@@ -41,11 +41,13 @@ function redirectResponse(location: string, setCookies: string[] = []): Response
   return res;
 }
 function rateLimitedResponse(retryAfterSeconds: number): Response {
-  return htmlPage(
+  const res = htmlPage(
     "Too many attempts",
     `<p>Please wait ${retryAfterSeconds} seconds before trying again.</p><p><a href="/" style="color:#C95D43">← Back to Pawls</a></p>`,
     429,
   );
+  res.headers.set("Retry-After", String(Math.max(1, Math.ceil(retryAfterSeconds))));
+  return res;
 }
 function formValue(form: FormData, key: string): string {
   return String(form.get(key) ?? "").trim();
@@ -58,6 +60,7 @@ export async function handleAuthPost(request: Request): Promise<Response> {
   let pathname: string;
   try { pathname = new URL(request.url).pathname; } catch { return htmlPage("Bad request", "<p>Could not read this request.</p>", 400); }
   switch (pathname) {
+    case "/auth/register": return handleRegisterPost(request);
     case "/auth/login": return handleLogin(request);
     case "/auth/logout": return handleLogout(request);
     case "/auth/verify-email": return handleVerifyEmail(request);

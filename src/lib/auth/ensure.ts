@@ -83,7 +83,7 @@ export async function ensureAuthTables(): Promise<void> {
   )`;
   await sql()`CREATE TABLE IF NOT EXISTS mail_log (
     id SERIAL PRIMARY KEY,
-    to TEXT NOT NULL,
+    "to" TEXT NOT NULL,
     subject TEXT NOT NULL,
     body TEXT NOT NULL,
     mode TEXT NOT NULL DEFAULT 'test',

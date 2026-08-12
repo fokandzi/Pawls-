@@ -55,7 +55,7 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
       if (hasSubscriptions) q.push(tx`DELETE FROM subscriptions WHERE lower(email) = lower(${user.email})`);
       if (hasReferrals) {
         q.push(tx`DELETE FROM referrals
-                  WHERE lower(referrer_id) = lower(${user.email}) OR lower(referred_email) = lower(${user.email})`);
+                  WHERE lower(referrer_code) = lower(${user.email}) OR lower(referred_email) = lower(${user.email})`);
       }
       q.push(tx`DELETE FROM sessions WHERE user_id = ${user.id}`);
       q.push(tx`DELETE FROM users WHERE id = ${user.id}`);
