@@ -15,13 +15,20 @@ export default defineConfig({
   build: {
     // Keep the client and SSR Rollup graphs from forming one large chunk.
     // This is especially important in the low-memory deployment sandbox.
+    //
+    // IMPORTANT: do NOT split node_modules into multiple named buckets
+    // (e.g. separate "react" vs "vendor" chunks). Splitting interdependent
+    // CJS-style packages (react <-> scheduler/react-dom) across chunks creates
+    // an ESM circular import; the vendor chunk evaluates first and calls
+    // React's lazy exports getter before react's module body has run, throwing
+    // "Cannot set properties of undefined (setting 'Activity')" at module
+    // evaluation time. That kills hydration site-wide (all onClick dead, SSR
+    // HTML still renders, zero console errors). One shared vendor chunk avoids
+    // the cycle entirely.
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("@tanstack")) return "tanstack";
-          if (id.includes("react")) return "react";
-          if (id.includes("stripe")) return "stripe";
           return "vendor";
         },
       },
