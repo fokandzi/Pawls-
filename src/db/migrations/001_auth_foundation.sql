@@ -102,6 +102,13 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 
 -- --- dog_profiles.user_id -----------------------------------------------------
 -- Additive: legacy demo/test rows keep user_id NULL (never shown publicly).
+-- Production already has the full dog_profiles table (auto-created at app boot
+-- by createMatchTables). A minimal stub is created here only so the migration is
+-- self-contained on a throwaway scratch database; it is a no-op where the real
+-- table exists. The scratch DB is never used by the application.
+CREATE TABLE IF NOT EXISTS dog_profiles (
+  id SERIAL PRIMARY KEY
+);
 ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);
 CREATE INDEX IF NOT EXISTS idx_dog_profiles_user_id ON dog_profiles(user_id);
 
@@ -120,7 +127,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- entries are visibly distinguishable from real production sends.
 CREATE TABLE IF NOT EXISTS mail_log (
   id         SERIAL PRIMARY KEY,
-  to         TEXT NOT NULL,
+  "to"       TEXT NOT NULL,
   subject    TEXT NOT NULL,
   body       TEXT NOT NULL,
   mode       TEXT NOT NULL DEFAULT 'test',

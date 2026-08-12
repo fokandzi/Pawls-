@@ -42,10 +42,17 @@ if (existsSync(ENV_PATH)) {
 const MIGRATIONS_DIR = join(process.cwd(), "src", "db", "migrations");
 
 function splitStatements(sqlText: string): string[] {
-  return sqlText
+  // Strip full-line comments BEFORE splitting: naive `;` splitting cannot tell a
+  // semicolon inside a comment from a statement terminator (e.g. the header
+  // comments of 001_auth_foundation.sql contain several).
+  const noComments = sqlText
+    .split("\n")
+    .filter((line) => !/^\s*--/.test(line))
+    .join("\n");
+  return noComments
     .split(";")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .filter((s) => s.length > 0);
 }
 
 async function ensureSchemaMigrations(sql: any) {
@@ -135,7 +142,8 @@ async function main() {
     const url = new URL(baseUrl);
     const adminSql = neon(baseUrl);
     console.log(`\n[scratch] creating database "${scratchDb}" ...`);
-    await adminSql.unsafe(`CREATE DATABASE ${scratchDb}`);
+    // NOTE: sql.unsafe() silently no-ops under Bun in this setup — use query().
+    await adminSql.query(`CREATE DATABASE ${scratchDb}`);
     const scratchUrl = new URL(baseUrl);
     scratchUrl.pathname = `/${scratchDb}`;
     const scratch = neon(scratchUrl.toString());
@@ -150,9 +158,27 @@ async function main() {
         process.exit(1);
       }
     } finally {
+      // The scratch client may still hold pooled connections to the scratch DB,
+      // which makes DROP DATABASE fail — terminate its backends first. Drop
+      // errors are logged, not fatal: they must never mask the real outcome.
       console.log(`[scratch] dropping database "${scratchDb}" ...`);
-      await adminSql.unsafe(`DROP DATABASE IF EXISTS ${scratchDb}`);
-      console.log("[scratch] done.");
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await adminSql.query(
+            `SELECT pg_terminate_backend(pid) FROM pg_stat_activity ` +
+              `WHERE datname = '${scratchDb}' AND pid <> pg_backend_pid()`
+          );
+          await adminSql.query(`DROP DATABASE IF EXISTS ${scratchDb}`);
+          console.log("[scratch] done.");
+          break;
+        } catch (e: any) {
+          if (attempt === 2) {
+            console.error(`  [warn] could not drop scratch DB: ${e?.message}`);
+          } else {
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+      }
     }
     return;
   }

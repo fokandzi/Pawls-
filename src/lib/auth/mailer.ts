@@ -43,7 +43,7 @@ export async function sendMail(message: MailMessage): Promise<MailResult> {
     );
     try {
       await sql()`
-        INSERT INTO mail_log (to, subject, body, mode)
+        INSERT INTO mail_log ("to", subject, body, mode)
         VALUES (${message.to}, ${message.subject}, ${body}, 'test')
       `;
     } catch (err) {
