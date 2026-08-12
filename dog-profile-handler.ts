@@ -121,19 +121,6 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
       headers: { Location: "/login?next=/match/create", "Cache-Control": NO_STORE },
     });
   }
-  // Auth: dog profile creation requires a real session. The owning user_id is
-  // taken from the session — never from the client.
-  const csrfCheck = assertSameOrigin(request);
-  if (!csrfCheck.ok) {
-    return textResponse(csrfCheck.error, 403, "text/plain");
-  }
-  const sessionUser = await getSessionUser(request);
-  if (!sessionUser) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "/login?next=/match/create", "Cache-Control": NO_STORE },
-    });
-  }
   // Validate required fields with a readable message.
   const missing: string[] = [];
   for (const key of REQUIRED_FIELDS) {

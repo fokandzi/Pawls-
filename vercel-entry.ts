@@ -12,8 +12,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import handler from "./dist/server/server.js";
 import { handleRegisterPost } from "./register-handler.ts";
-import { handleAuthPost } from "./auth-handler.ts";
-import { handleAuthPost } from "./auth-handler.ts";
+import { handleAuthPost } from "./src/auth-handler.ts";
+import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 

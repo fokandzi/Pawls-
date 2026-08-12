@@ -4,18 +4,18 @@
 // 400 invalid input / 401 bad credentials / 403 forbidden / 404 unknown token
 // / 429 rate limited / 503 email unavailable. Never an uncontrolled 500.
 import { createHash, randomBytes } from "node:crypto";
-import { sql } from "./src/db";
-import { ensureAuthTables, writeAudit } from "./src/lib/auth/ensure";
-import { hashPassword, verifyPassword, isLegacySha256Hash, constantTimeEqual } from "./src/lib/auth/hash";
+import { sql } from "./db";
+import { ensureAuthTables, writeAudit } from "./lib/auth/ensure";
+import { hashPassword, verifyPassword, isLegacySha256Hash, constantTimeEqual } from "./lib/auth/hash";
 import {
   createSession, revokeSession, revokeOtherSessions, revokeAllSessions,
   getSessionUser, clearSessionCookieHeader, requestIsSecure, sha256Hex,
-} from "./src/lib/auth/session";
-import { rateLimit, clientIp } from "./src/lib/auth/rate-limit";
-import { assertSameOrigin } from "./src/lib/auth/csrf";
-import { sendMail, verificationEmail, passwordResetEmail, emailDeliveryMode } from "./src/lib/auth/mailer";
-import { requireUser } from "./src/lib/auth/authz";
-import { deleteUserAccount } from "./src/lib/auth/deletion";
+} from "./lib/auth/session";
+import { rateLimit, clientIp } from "./lib/auth/rate-limit";
+import { assertSameOrigin } from "./lib/auth/csrf";
+import { sendMail, verificationEmail, passwordResetEmail, emailDeliveryMode } from "./lib/auth/mailer";
+import { requireUser } from "./lib/auth/authz";
+import { deleteUserAccount } from "./lib/auth/deletion";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NO_STORE = "no-store, max-age=0, must-revalidate";
