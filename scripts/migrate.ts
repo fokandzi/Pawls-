@@ -188,7 +188,8 @@ async function main() {
   await ensureSchemaMigrations(sql);
   const applied = await appliedVersions(sql);
   const n = await runMigrations(sql, files, applied, "prod");
-  console.log(`\n[done] applied ${n} new migration(s); ${files.length - applied.size - (n === 0 ? files.length - applied.size : files.length - applied.size - n)} remaining pending.`);
+  const remaining = Math.max(0, files.length - applied.size - n);
+  console.log(`\n[done] applied ${n} new migration(s); ${remaining} remaining pending.`);
   console.log(`[done] schema_migrations now has ${(await appliedVersions(sql)).size}/${files.length} versions.`);
 }
 
