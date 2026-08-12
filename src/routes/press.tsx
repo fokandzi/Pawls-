@@ -48,8 +48,7 @@ function PressPage() {
                   easier while fostering a global community of responsible, connected dog people.
                 </p>
                 <p>
-                  Pawls is available as a web application and will soon launch on the iOS App Store
-                  and Google Play Store.
+                  Pawls is currently available as a web application at pawls.club.
                 </p>
               </div>
             </div>
@@ -209,75 +208,6 @@ function PressPage() {
                       {placeholder.label}
                     </p>
                     <p className="mt-1 text-xs text-gray-400">Screenshot available on request</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* App Store Links */}
-          <section className="mb-16">
-            <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-8 shadow-sm sm:p-10">
-              <h2 className="text-2xl font-bold text-[var(--pawls-terracotta-500)]">Get the App</h2>
-              <div className="mt-6 flex flex-wrap gap-4">
-                <a
-                  href="#"
-                  className="inline-flex items-center gap-3 rounded-xl bg-black px-6 py-3 text-white transition-opacity hover:opacity-85"
-                >
-                  <span className="text-2xl"></span>
-                  <div className="text-left">
-                    <div className="text-xs">Download on the</div>
-                    <div className="text-lg font-semibold">App Store</div>
-                  </div>
-                </a>
-                <a
-                  href="#"
-                  className="inline-flex items-center gap-3 rounded-xl bg-black px-6 py-3 text-white transition-opacity hover:opacity-85"
-                >
-                  <span className="text-2xl">▶</span>
-                  <div className="text-left">
-                    <div className="text-xs">Get it on</div>
-                    <div className="text-lg font-semibold">Google Play</div>
-                  </div>
-                </a>
-              </div>
-              <p className="mt-4 text-sm text-gray-400">
-                App Store links coming soon. Pawls is currently available as a web app at{" "}
-                <a
-                  href="https://pawls.club"
-                  className="text-[var(--pawls-terracotta-500)] underline hover:text-[var(--pawls-terracotta-700)]"
-                >
-                  pawls.club
-                </a>
-                .
-              </p>
-            </div>
-          </section>
-
-          {/* Social Media */}
-          <section className="mb-16">
-            <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-8 shadow-sm sm:p-10">
-              <h2 className="text-2xl font-bold text-[var(--pawls-terracotta-500)]">Social Media</h2>
-              <p className="mt-3 leading-relaxed text-gray-700">
-                Follow Pawls on social media for the latest updates, featured dogs, and community
-                stories.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-4">
-                {[
-                  { label: "Instagram", handle: "@pawls.club", icon: "" },
-                  { label: "Twitter / X", handle: "@pawls_club", icon: "" },
-                  { label: "TikTok", handle: "@pawls.club", icon: "" },
-                  { label: "Facebook", handle: "/pawlsclub", icon: "" },
-                ].map((social) => (
-                  <div
-                    key={social.label}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 px-5 py-3"
-                  >
-                    <span className="text-xl">{social.icon}</span>
-                    <div>
-                      <div className="text-xs font-medium text-gray-500">{social.label}</div>
-                      <div className="text-sm font-semibold text-gray-800">{social.handle}</div>
-                    </div>
                   </div>
                 ))}
               </div>

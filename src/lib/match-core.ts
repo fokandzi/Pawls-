@@ -406,7 +406,7 @@ export async function editDog(sessionUserId: number, dogId: number, fields: Reco
   const setSql = `${sets.join(", ")}, updated_at = NOW()`;
   const params = [...vals, dogIdNum, sessionUserId];
   await q.query(
-    `UPDATE dog_profiles SET ${setSql} WHERE id = ${params.length - 1} AND user_id = ${params.length}`,
+    `UPDATE dog_profiles SET ${setSql} WHERE id = $${params.length - 1} AND user_id = $${params.length}`,
     params,
   );
   return { ok: true, status: 200 };
