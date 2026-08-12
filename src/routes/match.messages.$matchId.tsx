@@ -319,17 +319,17 @@ function ChatPage() {
           <div className="max-w-sm text-center">
             <span className="text-6xl"></span>
             <h2 className="mt-4 text-2xl font-bold text-gray-900">
-              Pawls Plus Required
+              Messaging — coming soon
             </h2>
             <p className="mt-2 text-gray-600">
-              Messaging is a premium feature. Upgrade to Pawls Plus to chat with{" "}
-              {otherDog ? <strong>{otherDog.name}</strong> : "your match"}!
+              Messaging between matches is being built. It's not available yet —
+              we'll let you know as soon as it's live.
             </p>
             <Link
               to="/plus"
               className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[var(--pawls-gold-400)] to-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--pawls-cream-50)]0/25 transition-all hover:from-[var(--pawls-cream-50)]0 hover:to-[var(--pawls-terracotta-700)]"
             >
-               Get Pawls Plus — €8/mo
+               Pawls Plus — coming soon
             </Link>
             <Link
               to="/match/matches"

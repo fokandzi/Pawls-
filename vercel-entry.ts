@@ -13,6 +13,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import handler from "./dist/server/server.js";
 import { handleRegisterPost } from "./register-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
+import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 const fetchHandler = handler as {
   fetch: (request: Request) => Response | Promise<Response>;
@@ -73,6 +74,23 @@ export default async function vercelHandler(
       createRes.headers.forEach((value, key) => res.setHeader(key, value));
       if (createRes.body) {
         const reader = createRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+
+    // Native POST /api/waitlist — landing-page waitlist form posts here.
+    if (request.method === "POST" && new URL(request.url).pathname === "/api/waitlist") {
+      const waitlistRes = await handleWaitlistPost(request);
+      res.statusCode = waitlistRes.status;
+      waitlistRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (waitlistRes.body) {
+        const reader = waitlistRes.body.getReader();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;

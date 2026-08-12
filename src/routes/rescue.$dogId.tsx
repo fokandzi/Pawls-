@@ -168,13 +168,8 @@ function RescueDogDetailPage() {
     );
   }
 
-  const mailtoSubject = encodeURIComponent(`Adoption inquiry: ${dog.name} (${dog.breed})`);
-  const mailtoBody = encodeURIComponent(
-    `Hello ${dog.shelter_name},\n\nI'm interested in adopting ${dog.name} (${dog.breed}, ${ageLabel(dog.age)}).\n\nCould you tell me more about the adoption process?\n\nThank you!`
-  );
-  const mailtoHref = dog.shelter_email
-    ? `mailto:${dog.shelter_email}?subject=${mailtoSubject}&body=${mailtoBody}`
-    : "#";
+  // No mailto/apply flow: these are demo listings and shelters are not yet
+  // partners, so there is no real contact or adoption flow to offer (Phase 1a).
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -192,12 +187,13 @@ function RescueDogDetailPage() {
         </div>
       </div>
 
-      {/* Urgent banner */}
+      {/* Urgent banner — demo data, so no implied contactable shelter */}
       {dog.urgent && (
         <div className="bg-red-500 px-6 py-3">
           <div className="mx-auto max-w-4xl text-center">
             <p className="text-sm font-bold text-white">
-               URGENT — This dog needs a home soon! Please reach out to {dog.shelter_name} today.
+               URGENT — This demo listing shows how urgent markers will look on
+               real rescue profiles once shelters join Pawls.
             </p>
           </div>
         </div>
@@ -283,37 +279,32 @@ function RescueDogDetailPage() {
             <div className="lg:col-span-2">
               {/* Dog name + basics */}
               <div className="mb-6">
-                <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-                  {dog.name}
-                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                    {dog.name}
+                  </h1>
+                  {/* Demo listing badge — matches the list page pattern */}
+                  <span className="inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-2.5 py-1 text-xs font-semibold text-[var(--pawls-gold-500)] shadow-sm">
+                    Demo
+                  </span>
+                </div>
                 <p className="mt-1 text-lg text-gray-500">{dog.breed} · {sizeLabel[dog.size] ?? dog.size} · {ageLabel(dog.age)}</p>
               </div>
-
               {/* Description */}
               <div className="mb-8">
                 <h2 className="mb-3 text-lg font-semibold text-gray-900">About {dog.name}</h2>
                 <p className="leading-relaxed text-gray-700">{dog.description}</p>
               </div>
-
-              {/* Apply button */}
+              {/* Adoption flow — coming soon (no fake Apply flow) */}
               <div className="mb-10">
-                <a
-                  href={mailtoHref}
-                  className={`inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-base font-semibold shadow-lg transition-colors ${
-                    dog.shelter_email
-                      ? "bg-[var(--pawls-terracotta-500)] text-white shadow-[var(--pawls-terracotta-500)]/25 hover:bg-[var(--pawls-terracotta-700)]"
-                      : "pointer-events-none bg-gray-300 text-gray-500"
-                  }`}
-                >
-                   Apply to Adopt
-                </a>
-                {!dog.shelter_email && (
-                  <p className="mt-2 text-xs text-gray-400">
-                    No email address available. Please contact the shelter directly (details below).
-                  </p>
-                )}
+                <span className="inline-flex items-center gap-2 rounded-full bg-gray-200 px-8 py-3.5 text-base font-semibold text-gray-500">
+                  🐾 Adoption coming soon
+                </span>
+                <p className="mt-2 text-sm text-gray-400">
+                  Live adoption applications are being set up — shelters will
+                  join Pawls soon.
+                </p>
               </div>
-
               {/* Shelter info */}
               <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/30 p-6">
                 <h2 className="mb-1 text-lg font-semibold text-gray-900">{dog.shelter_name}</h2>
@@ -321,35 +312,10 @@ function RescueDogDetailPage() {
                 <p className="mb-4 text-sm leading-relaxed text-gray-600">{dog.shelter_description}</p>
 
                 <div className="space-y-2 border-t border-[var(--pawls-cream-100)] pt-4">
-                  {dog.shelter_phone && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-400"></span>
-                      <a href={`tel:${dog.shelter_phone}`} className="text-[var(--pawls-terracotta-500)] hover:underline">
-                        {dog.shelter_phone}
-                      </a>
-                    </div>
-                  )}
-                  {dog.shelter_email && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-400"></span>
-                      <a href={`mailto:${dog.shelter_email}`} className="text-[var(--pawls-terracotta-500)] hover:underline">
-                        {dog.shelter_email}
-                      </a>
-                    </div>
-                  )}
-                  {dog.shelter_website && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-400"></span>
-                      <a
-                        href={dog.shelter_website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[var(--pawls-terracotta-500)] hover:underline"
-                      >
-                        Visit website
-                      </a>
-                    </div>
-                  )}
+                  <p className="text-sm text-gray-400">
+                    Contact details are hidden while Pawls is in beta — they'll
+                    appear here once this shelter joins the platform.
+                  </p>
                 </div>
               </div>
             </div>

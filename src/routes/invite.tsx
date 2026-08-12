@@ -8,9 +8,9 @@ import { trackEvent } from "../lib/analytics"
 
 export const Route = createFileRoute("/invite")({
   head: () => seoHead({
-    title: "Invite Friends — Get a Free Month of Pawls Plus | Pawls",
+    title: "Invite Friends to Pawls | Pawls",
     description:
-      "Invite your dog-loving friends to Pawls and you both get 1 free month of Pawls Plus. Share your unique referral link and earn rewards.",
+      "Invite your dog-loving friends to Pawls. Share your unique referral link and help the Pawls community grow.",
     path: "/invite",
   }),
   component: InvitePage,
@@ -83,17 +83,18 @@ function InvitePage() {
         <div className="pointer-events-none absolute right-12 top-16 rotate-[15deg] select-none text-3xl opacity-15"></div>
 
         <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-[var(--pawls-cream-100)] px-4 py-1.5 text-sm font-semibold text-[var(--pawls-ink-700)]">
-           Earn Rewards
+           Invite Your Pack
         </span>
 
         <h1 className="max-w-2xl text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
           Invite Friends,{" "}
-          <span className="text-[var(--pawls-terracotta-500)]">Earn Free Months</span>
+          <span className="text-[var(--pawls-terracotta-500)]">Grow the Pack</span>
         </h1>
 
         <p className="mt-4 max-w-lg text-lg text-gray-600">
-          Share Pawls with your dog-loving friends. When they join, you{" "}
-          <strong>both</strong> get 1 free month of Pawls Plus. No limits — refer as many as you want!
+          Share Pawls with your dog-loving friends and help grow the
+          community. Referral rewards (including Pawls Plus perks) are coming
+          soon — we'll announce them right here.
         </p>
       </section>
 
@@ -146,14 +147,14 @@ function InvitePage() {
               <p className="mt-1 text-sm text-gray-500">Friends Referred</p>
             </div>
 
-            {/* Reward Status */}
+            {/* Reward Status — honest: rewards are not live yet */}
             <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-6 text-center shadow-sm">
-              <div className="mb-2 text-4xl"></div>
+              <div className="mb-2 text-4xl">🎁</div>
               <p className="text-3xl font-extrabold text-[var(--pawls-terracotta-500)]">
-                {referralCount > 0 ? `${referralCount}` : "0"}
+                Soon
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                Free Months Earned
+                Referral rewards — coming soon
               </p>
             </div>
           </div>
@@ -176,13 +177,13 @@ function InvitePage() {
                 step: "2",
                 emoji: "",
                 title: "They join Pawls",
-                desc: "When a friend clicks your link and signs up, they instantly get 1 free month of Pawls Plus — unlocked automatically.",
+                desc: "When a friend clicks your link and signs up, they're part of the Pawls community — and both of you count toward referral rewards when they launch.",
               },
               {
                 step: "3",
                 emoji: "",
-                title: "You both get rewarded",
-                desc: "You also get 1 free month of Pawls Plus per successful referral. There's no cap — the more friends you bring, the more free months you earn!",
+                title: "Rewards coming soon",
+                desc: "We're building referral rewards — including Pawls Plus perks — and will announce them here when they're live.",
               },
             ].map((item) => (
               <div
@@ -211,7 +212,8 @@ function InvitePage() {
               You've Been Invited!
             </h2>
             <p className="mt-2 text-gray-600">
-              A friend invited you to Pawls. Claim your <strong>1 free month of Pawls Plus</strong> now!
+              A friend invited you to Pawls. Welcome! Referral rewards are
+              coming soon — we'll email you when they launch.
             </p>
             <button
               onClick={handleClaimReward}
@@ -224,7 +226,7 @@ function InvitePage() {
                   Activating...
                 </>
               ) : (
-                " Claim My Free Month"
+                " 🐾 Rewards coming soon"
               )}
             </button>
           </div>
@@ -237,10 +239,11 @@ function InvitePage() {
           <div className="mx-auto max-w-lg text-center">
             <div className="text-4xl"></div>
             <h2 className="mt-3 text-xl font-bold text-emerald-800">
-              Your Free Month is Active!
+              You're on the list!
             </h2>
             <p className="mt-1 text-sm text-emerald-600">
-              Enjoy all Pawls Plus features — unlimited swipes, advanced filters, priority booking, and more!
+              Thanks for joining Pawls. Referral rewards are coming soon —
+              we'll be in touch when they're live.
             </p>
           </div>
         </section>
@@ -250,7 +253,7 @@ function InvitePage() {
       <section className="bg-white px-6 pb-20">
         <div className="mx-auto max-w-md text-center">
           <h2 className="text-xl font-bold text-gray-900">Ready to share?</h2>
-          <p className="mt-2 text-gray-600">The more friends you invite, the more free months you stack up!</p>
+          <p className="mt-2 text-gray-600">The more friends you invite, the faster Pawls grows — and everyone earns rewards when they launch.</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button
               onClick={handleCopy}

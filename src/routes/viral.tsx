@@ -63,7 +63,7 @@ function ViralPage() {
            Viral Paws
         </h1>
         <p className="mt-3 text-lg text-gray-600">
-          Trending dogs from our Plus community
+          Demo feed — the viral leaderboard is coming soon
         </p>
 
         {/* Plus upsell banner */}
@@ -71,7 +71,7 @@ function ViralPage() {
           to="/plus"
           className="mx-auto mt-6 inline-flex max-w-md items-center gap-2 rounded-full bg-gradient-to-r from-[var(--pawls-gold-400)] to-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--pawls-cream-50)]0/25 transition-all hover:from-[var(--pawls-cream-50)]0 hover:to-[var(--pawls-terracotta-700)] hover:shadow-xl hover:scale-105"
         >
-           Want your dog here? Upgrade to Plus →
+           Pawls Plus — coming soon →
         </Link>
       </section>
 
@@ -241,7 +241,7 @@ function ViralPage() {
                   to="/plus"
                   className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-gradient-to-r from-[var(--pawls-gold-400)] to-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[var(--pawls-cream-50)]0/25 transition-all hover:from-[var(--pawls-cream-50)]0 hover:to-[var(--pawls-terracotta-700)]"
                 >
-                   Get Plus to feature your dog
+                   Pawls Plus — coming soon
                 </Link>
               </div>
             </div>

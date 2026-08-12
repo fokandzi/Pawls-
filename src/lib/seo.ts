@@ -54,19 +54,19 @@ export const SEO = {
   home: {
     title: "Pawls — The All-in-One Dog App | Match, Book, Breed & Rescue",
     description:
-      "Pawls is the all-in-one platform for dog people. Find playmates, book walkers & groomers, connect with ethical breeders, rescue dogs, and join local dog communities.",
+      "Pawls is the all-in-one platform for dog people. Match your dog with playmates, explore breeder and rescue listings, and discover dog-friendly services — all in one place. Match is live in beta; more features are coming soon.",
   } as SEOPage,
 
   match: {
-    title: "Match Your Dog — Find Playmates Nearby | Pawls",
+    title: "Match Your Dog — Find Playmates | Pawls",
     description:
-      "Swipe right to find compatible dog playmates near you. Filter by temperament, size, energy level, and location. Make playdates happen with Pawls Match.",
+      "Try Pawls Match (beta) — swipe through dog profiles to find potential playmates for your pup. Currently in beta with demo profiles while we roll out to your city.",
     path: "/match",
   } as SEOPage,
   register: {
     title: "Sign Up for Pawls — Create Your Free Account",
     description:
-      "Create your free Pawls account and start matching your dog with compatible playmates, booking services, and more.",
+      "Create your free Pawls account and set up your dog's profile. Sign-up is open — Match is live in beta, and more features are coming soon.",
     path: "/register",
   } as SEOPage,
 
@@ -85,51 +85,51 @@ export const SEO = {
   } as SEOPage,
 
   book: {
-    title: "Book Dog Services — Walkers, Groomers, Sitters & Vets | Pawls",
+    title: "Dog Services — Walkers, Groomers, Sitters & Vets | Pawls",
     description:
-      "Find and book trusted dog services in Paris: walkers, groomers, sitters, trainers, and veterinarians. Instant online booking with verified providers.",
+      "Explore dog services in Paris: walkers, groomers, sitters, trainers, and veterinarians. Online booking is coming soon — current provider listings are demo profiles.",
     path: "/book",
   } as SEOPage,
 
   "book/register": {
     title: "List Your Dog Service — Join Pawls as a Provider",
     description:
-      "Are you a dog walker, groomer, sitter, or trainer in Paris? List your services on Pawls and get booked by local dog owners.",
+      "Are you a dog walker, groomer, sitter, or trainer in Paris? Register your business on Pawls. Provider sign-up is opening soon.",
     path: "/book/register",
   } as SEOPage,
 
   breed: {
-    title: "Ethical Dog Breeders — Find Healthy Puppies | Pawls",
+    title: "Dog Breeders & Ethical Breeding Guide | Pawls",
     description:
-      "Connect with vetted, ethical dog breeders in Paris and Île-de-France. Browse health-tested litters, learn about breeds, and find your perfect puppy responsibly.",
+      "Browse breeder profiles and learn what ethical, health-tested breeding looks like. Breeder verification is coming soon — current listings are demo profiles.",
     path: "/breed",
   } as SEOPage,
 
   "breed/register": {
     title: "Register as a Breeder — Pawls Breeder Network",
     description:
-      "Join the Pawls ethical breeder network. List your litters, showcase health testing, and connect with responsible dog owners.",
+      "Join the Pawls breeder network. List your litters, showcase health testing, and connect with responsible dog owners. Breeder registration is opening soon.",
     path: "/breed/register",
   } as SEOPage,
 
   "breed/membership": {
     title: "Breeder Memberships — Pawls Premium Listings",
     description:
-      "Upgrade your breeder listing with Pawls membership tiers. Get verified, featured placement, and reach more qualified puppy buyers.",
+      "Learn about Pawls breeder membership tiers for verified listings and featured placement. Memberships are coming soon.",
     path: "/breed/membership",
   } as SEOPage,
 
   rescue: {
-    title: "Adopt a Dog — Rescue Dogs in Paris | Pawls",
+    title: "Adopt a Dog — Rescue Dogs | Pawls",
     description:
-      "Browse adoptable dogs from shelters and rescues across Paris. Find your new best friend — search by breed, size, age, and temperament.",
+      "Browse rescue dog profiles from shelters across the Paris region. Current listings are demo profiles — live shelter partnerships are coming soon.",
     path: "/rescue",
   } as SEOPage,
 
   connect: {
     title: "Dog Community — Groups, Events & Meetups | Pawls",
     description:
-      "Join local dog groups, discover dog-friendly events, and connect with dog owners in Paris. From hiking clubs to puppy socials — find your pack.",
+      "Local dog groups, events, and meetups for dog owners — the community layer is coming soon to Pawls.",
     path: "/connect",
   } as SEOPage,
 
@@ -141,16 +141,16 @@ export const SEO = {
   } as SEOPage,
 
   plus: {
-    title: "Pawls Plus — Premium Dog App Features | Pawls",
+    title: "Pawls Plus — Coming Soon | Pawls",
     description:
-      "Upgrade to Pawls Plus for unlimited swipes, advanced filters, priority booking, verified profile badge, and early access to new features. €8/month.",
+      "Pawls Plus is a premium tier for dog owners that's still in development. See what's planned and join the waitlist — no pricing announced yet.",
     path: "/plus",
   } as SEOPage,
 
   "plus/success": {
-    title: "Welcome to Pawls Plus! | Pawls",
+    title: "Thank You — Pawls",
     description:
-      "Your Pawls Plus subscription is active. Enjoy unlimited swipes, priority booking, and all premium features.",
+      "Thank you for supporting Pawls. Your payment was received — premium features are coming soon and Plus members get early access.",
     path: "/plus/success",
     noIndex: true,
   } as SEOPage,
@@ -169,13 +169,6 @@ export const SEO = {
     path: "/viral",
   } as SEOPage,
 
-  paris: {
-    title: "Pawls — The Dog App for Paris | Match, Book, Breed & Rescue",
-    description:
-      "Pawls is the all-in-one dog app for Paris. Find playmates in the 11e, book dog walkers in the Marais, discover ethical breeders in Île-de-France, and adopt rescue dogs across the city.",
-    path: "/paris",
-  } as SEOPage,
-
   privacy: {
     title: "Privacy Policy — Pawls",
     description:
@@ -192,44 +185,11 @@ export const SEO = {
   } as SEOPage,
 };
 
-/** 20 Paris arrondissements */
-export const ARRONDISSEMENTS = [
-  { num: "1er", name: "Louvre", center: "Louvre, Palais-Royal, Les Halles" },
-  { num: "2e", name: "Bourse", center: "Bourse, Grands Boulevards, Sentier" },
-  { num: "3e", name: "Temple", center: "Marais, Temple, Arts-et-Métiers" },
-  { num: "4e", name: "Hôtel-de-Ville", center: "Marais, Notre-Dame, Île de la Cité" },
-  { num: "5e", name: "Panthéon", center: "Latin Quarter, Sorbonne, Jardin des Plantes" },
-  { num: "6e", name: "Luxembourg", center: "Saint-Germain-des-Prés, Luxembourg" },
-  { num: "7e", name: "Palais-Bourbon", center: "Eiffel Tower, Invalides, Champ de Mars" },
-  { num: "8e", name: "Élysée", center: "Champs-Élysées, Madeleine, Parc Monceau" },
-  { num: "9e", name: "Opéra", center: "Opéra Garnier, Pigalle, Trudaine" },
-  { num: "10e", name: "Entrepôt", center: "Canal Saint-Martin, Gare du Nord, République" },
-  { num: "11e", name: "Popincourt", center: "Bastille, Oberkampf, République" },
-  { num: "12e", name: "Reuilly", center: "Gare de Lyon, Bercy, Bois de Vincennes" },
-  { num: "13e", name: "Gobelins", center: "Place d'Italie, Bibliothèque, Butte-aux-Cailles" },
-  { num: "14e", name: "Observatoire", center: "Montparnasse, Parc Montsouris, Denfert" },
-  { num: "15e", name: "Vaugirard", center: "Tour Eiffel, Parc André Citroën, Convention" },
-  { num: "16e", name: "Passy", center: "Trocadéro, Bois de Boulogne, Auteuil" },
-  { num: "17e", name: "Batignolles-Monceau", center: "Batignolles, Place Clichy, Wagram" },
-  { num: "18e", name: "Butte-Montmartre", center: "Montmartre, Sacré-Cœur, Barbès" },
-  { num: "19e", name: "Buttes-Chaumont", center: "Parc des Buttes-Chaumont, La Villette, Belleville" },
-  { num: "20e", name: "Ménilmontant", center: "Belleville, Père Lachaise, Gambetta" },
-];
-
-/** Generate SEO for a paris arrondissement page */
-export function seoArrondissement(arr: { num: string; name: string; center: string }): SEOPage {
-  return {
-    title: `Pawls in Paris ${arr.num} (${arr.name}) — Dog Services, Playmates & Breeders`,
-    description: `Find dog playmates, book walkers & groomers, discover breeders, and adopt rescue dogs in Paris ${arr.num} (${arr.name}). Pawls covers ${arr.center} and surrounding areas.`,
-    path: `/paris/${arr.num.toLowerCase()}`,
-  };
-}
-
 /** Generate SEO for a breeder detail page */
 export function seoBreeder(breederName: string, breedSpecialty: string): SEOPage {
   return {
     title: `${breederName} — ${breedSpecialty} Breeder | Pawls`,
-    description: `${breederName} — ethical ${breedSpecialty} breeder. Health-tested puppies, verified breeder on Pawls. Learn about available litters and breeding practices.`,
+    description: `${breederName} — ${breedSpecialty} breeder profile on Pawls. Demo listing — breeder verification is coming soon. Learn about available litters and breeding practices.`,
     path: `/breed/${encodeURIComponent(breederName.toLowerCase().replace(/\s+/g, "-"))}`,
   };
 }
@@ -237,8 +197,8 @@ export function seoBreeder(breederName: string, breedSpecialty: string): SEOPage
 /** Generate SEO for a rescue dog detail page */
 export function seoRescueDog(dogName: string, breed: string): SEOPage {
   return {
-    title: `Adopt ${dogName} — ${breed} for Adoption in Paris | Pawls`,
-    description: `${dogName} is a ${breed} looking for a forever home in Paris. Learn more about ${dogName}'s temperament, compatibility, and how to adopt through Pawls Rescue.`,
+    title: `Adopt ${dogName} — ${breed} for Adoption | Pawls`,
+    description: `${dogName} is a ${breed} looking for a forever home. Demo listing — live shelter partnerships are coming soon. Learn about ${dogName}'s temperament and compatibility.`,
     path: `/rescue/${encodeURIComponent(dogName.toLowerCase())}`,
   };
 }
@@ -247,8 +207,8 @@ export function seoRescueDog(dogName: string, breed: string): SEOPage {
 export function seoProvider(providerName: string, category: string): SEOPage {
   const catLabel = category.charAt(0).toUpperCase() + category.slice(1);
   return {
-    title: `${providerName} — Dog ${catLabel} in Paris | Pawls`,
-    description: `Book ${providerName}, a trusted dog ${category} in Paris. View services, ratings, and availability. Instant online booking on Pawls.`,
+    title: `${providerName} — Dog ${catLabel} | Pawls`,
+    description: `Explore ${providerName}, a dog ${category} in Paris. Demo listing — online booking is coming soon. View services and availability.`,
     path: `/book/${encodeURIComponent(providerName.toLowerCase().replace(/\s+/g, "-"))}`,
   };
 }
@@ -267,11 +227,6 @@ export function organizationJsonLd(): Record<string, unknown> {
       "@type": "Offer",
       price: "0",
       priceCurrency: "EUR",
-    },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.8",
-      ratingCount: "1240",
     },
   };
 }

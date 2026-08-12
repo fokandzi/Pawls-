@@ -220,10 +220,10 @@ function BreederRegisterPage() {
                     <li> Priority support</li>
                   </ul>
                   <button
-                    onClick={() => handleUpgrade("plus", 2500)}
-                    className="mt-5 w-full rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[var(--pawls-terracotta-700)]"
+                    disabled
+                    className="mt-5 w-full cursor-not-allowed rounded-full bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-500"
                   >
-                    Upgrade to Plus — €25/mo
+                    Coming soon
                   </button>
                 </div>
 
@@ -242,10 +242,10 @@ function BreederRegisterPage() {
                     <li> Homepage features</li>
                   </ul>
                   <button
-                    onClick={() => handleUpgrade("premium", 4000)}
-                    className="mt-5 w-full rounded-full bg-gradient-to-r from-yellow-500 to-[var(--pawls-gold-500)] px-6 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:from-yellow-600 hover:to-[var(--pawls-gold-500)]"
+                    disabled
+                    className="mt-5 w-full cursor-not-allowed rounded-full bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-500"
                   >
-                    Upgrade to Premium — €40/mo
+                    Coming soon
                   </button>
                 </div>
               </div>

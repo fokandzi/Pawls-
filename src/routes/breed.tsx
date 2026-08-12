@@ -313,11 +313,10 @@ function membershipBadge(tier: string) {
 }
 
 function verificationBadge(status: string) {
-  if (status === "verified") {
-    return { label: " Verified", bg: "bg-green-100", text: "text-green-700" };
-  }
-  if (status === "featured") {
-    return { label: " Featured", bg: "bg-purple-100", text: "text-purple-700" };
+  // Honest display: verification is not real yet — all current listings are
+  // demo profiles (Phase 1b handles the seeded data itself).
+  if (status === "verified" || status === "featured") {
+    return { label: " Demo listing", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
   }
   return { label: "⏳ Pending", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
 }
@@ -344,10 +343,12 @@ function BreedPage() {
           {/* Hero */}
           <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Find Ethical Breeders
+              Find Breeders, Responsibly
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-              Connect with vetted, health-tested breeders who put their dogs first. Every listed breeder meets our ethical standards.
+              Browse breeder profiles and learn what ethical, health-tested
+              breeding looks like. Demo listings — breeder verification coming
+              soon.
             </p>
           </section>
 

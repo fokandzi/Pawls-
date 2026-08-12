@@ -518,10 +518,15 @@ function RescuePage() {
           {/* Hero */}
           <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Find Your Forever Friend 
+              Find Your Forever Friend 🐾
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-              Browse adoptable dogs from shelters across the Paris region. Every dog deserves a loving home — could yours be the one?
+              Browse rescue dog profiles from shelters across the Paris region.
+              Every dog deserves a loving home — could yours be the one?
+            </p>
+            <p className="mx-auto mt-3 max-w-lg rounded-xl bg-[var(--pawls-cream-100)] px-4 py-2 text-sm text-[var(--pawls-ink-700)]">
+              Demo listings — live shelter partnerships are coming soon.
+              Contact details are hidden until shelters join Pawls.
             </p>
           </section>
 
@@ -651,6 +656,13 @@ function RescuePage() {
                                 </span>
                               </div>
                             )}
+
+                            {/* Demo listing badge */}
+                            <div className="absolute left-3 top-3 z-10">
+                              <span className="inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-2.5 py-1 text-xs font-semibold text-[var(--pawls-gold-500)] shadow-sm">
+                                Demo
+                              </span>
+                            </div>
 
                             {/* Photo — same deterministic placedog URL as the detail page */}
                             <div className="relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">

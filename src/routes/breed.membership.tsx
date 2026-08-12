@@ -35,7 +35,7 @@ const tiers = [
       "Priority email support",
       "Breeder detail page enhancements",
     ],
-    cta: "Upgrade to Plus",
+    cta: "Coming soon",
     highlight: false,
     popular: true,
   },
@@ -54,7 +54,7 @@ const tiers = [
       "Litter analytics & insights",
       "Dedicated account manager",
     ],
-    cta: "Upgrade to Premium",
+    cta: "Coming soon",
     highlight: true,
   },
 ];
@@ -105,7 +105,8 @@ function MembershipPage() {
             Grow Your Breeding Program
           </h1>
           <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-            Choose the plan that fits your kennel. Upgrade anytime — more visibility, more litters, more families connected with your dogs.
+            Breeder memberships are coming soon — pricing below is the
+            intended structure and nothing is billable yet.
           </p>
         </section>
 
@@ -170,16 +171,11 @@ function MembershipPage() {
 
                   {/* CTA button */}
                   <button
-                    onClick={() =>
-                      handleUpgrade(tier.key, tier.priceCents)
-                    }
-                    disabled={tier.key === "free"}
-                    className={`w-full rounded-full px-6 py-3 text-sm font-semibold transition-all ${
+                    disabled
+                    className={`w-full cursor-not-allowed rounded-full px-6 py-3 text-sm font-semibold ${
                       tier.key === "free"
-                        ? "cursor-default border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] text-[var(--pawls-gold-500)]"
-                        : isGold
-                          ? "bg-gradient-to-r from-yellow-500 to-[var(--pawls-gold-500)] text-white shadow-lg shadow-[var(--pawls-cream-50)]0/30 hover:from-yellow-600 hover:to-[var(--pawls-gold-500)]"
-                          : "bg-[var(--pawls-terracotta-500)] text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 hover:bg-[var(--pawls-terracotta-700)]"
+                        ? "border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] text-[var(--pawls-gold-500)]"
+                        : "bg-gray-200 text-gray-500"
                     }`}
                   >
                     {tier.cta}

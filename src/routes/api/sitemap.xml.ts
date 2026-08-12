@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ARRONDISSEMENTS } from "../../lib/seo";
 
 const BASE = "https://pawls.club";
 
@@ -18,8 +17,6 @@ const staticRoutes: { path: string; lastmod: string; priority: string; changefre
   { path: "/connect", lastmod: "2026-07-20", priority: "0.8", changefreq: "weekly" },
   { path: "/venues", lastmod: "2026-07-20", priority: "0.8", changefreq: "weekly" },
   { path: "/plus", lastmod: "2026-07-20", priority: "0.8", changefreq: "weekly" },
-  // Paris geo pages
-  { path: "/paris", lastmod: "2026-07-20", priority: "0.9", changefreq: "weekly" },
 ];
 
 function urlEntry(loc: string, lastmod: string, priority: string, changefreq: string): string {
@@ -39,12 +36,6 @@ function generateSitemap(): string {
     entries.push(urlEntry(`${BASE}${r.path}`, r.lastmod, r.priority, r.changefreq));
   }
 
-  // Paris arrondissements
-  for (const arr of ARRONDISSEMENTS) {
-    entries.push(
-      urlEntry(`${BASE}/paris/${arr.num.toLowerCase()}`, "2026-07-20", "0.7", "weekly"),
-    );
-  }
 
   // Breeder detail pages (seeded data — IDs 1-6)
   const breederSlugs = [

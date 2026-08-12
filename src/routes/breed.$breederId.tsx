@@ -76,8 +76,8 @@ function membershipBadge(tier: string) {
 }
 
 function verificationBadge(status: string) {
-  if (status === "verified") return { label: " Verified", bg: "bg-green-100", text: "text-green-700" };
-  if (status === "featured") return { label: " Featured", bg: "bg-purple-100", text: "text-purple-700" };
+  // Honest display: verification is not real yet — all current listings are demo profiles.
+  if (status === "verified" || status === "featured") return { label: " Demo listing", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
   return { label: "⏳ Pending Verification", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
 }
 
@@ -104,7 +104,7 @@ export const Route = createFileRoute("/breed/$breederId")({
     if (d?.breeder) {
       return seoHead(seoBreeder(d.breeder.name, d.breeder.breed_specialty));
     }
-    return seoHead({ title: "Breeder — Pawls", description: "View ethical breeder details on Pawls.", path: "/breed" });
+    return seoHead({ title: "Breeder — Pawls", description: "View breeder details on Pawls. Demo listing — breeder verification coming soon.", path: "/breed" });
   },
   loader: ({ params }) => getBreederDetail({ data: { breederId: Number(params.breederId) } }),
   component: BreederDetailPage,

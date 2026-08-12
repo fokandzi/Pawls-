@@ -319,6 +319,10 @@ function VenuesPage() {
         <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
           Discover parks, cafés, beaches, and trails that welcome your four-legged friend with open paws.
         </p>
+        <p className="mx-auto mt-3 max-w-lg rounded-xl bg-[var(--pawls-cream-100)] px-4 py-2 text-sm text-[var(--pawls-ink-700)]">
+          Demo venues — venue partnerships are coming soon. Ratings shown are
+          examples, not verified reviews.
+        </p>
       </section>
 
       {error || !venues || venues.length === 0 ? (
