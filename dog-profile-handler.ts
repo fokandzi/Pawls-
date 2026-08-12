@@ -18,6 +18,10 @@
 // standalone bundle (bun build vercel-entry.ts / bun serve.ts) calling it would
 // silently no-op. Raw `sql()` DDL is the proven pattern from register-handler.ts.
 import { sql } from "./src/db";
+import { getSessionUser } from "./src/lib/auth/session";
+import { assertSameOrigin } from "./src/lib/auth/csrf";
+import { getSessionUser } from "./src/lib/auth/session";
+import { assertSameOrigin } from "./src/lib/auth/csrf";
 
 const REQUIRED_FIELDS = [
   "ownerName",
@@ -104,6 +108,32 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
     youtube: get("youtube").slice(0, 300),
   };
 
+  // Auth: dog profile creation requires a real session. The owning user_id is
+  // taken from the session — never from the client.
+  const csrfCheck = assertSameOrigin(request);
+  if (!csrfCheck.ok) {
+    return textResponse(csrfCheck.error, 403, "text/plain");
+  }
+  const sessionUser = await getSessionUser(request);
+  if (!sessionUser) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "/login?next=/match/create", "Cache-Control": NO_STORE },
+    });
+  }
+  // Auth: dog profile creation requires a real session. The owning user_id is
+  // taken from the session — never from the client.
+  const csrfCheck = assertSameOrigin(request);
+  if (!csrfCheck.ok) {
+    return textResponse(csrfCheck.error, 403, "text/plain");
+  }
+  const sessionUser = await getSessionUser(request);
+  if (!sessionUser) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "/login?next=/match/create", "Cache-Control": NO_STORE },
+    });
+  }
   // Validate required fields with a readable message.
   const missing: string[] = [];
   for (const key of REQUIRED_FIELDS) {
@@ -170,7 +200,7 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
   try {
     await ensureDogProfilesTable();
     const [row] = await sql()`
-      INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, bio, photo_url, location, email, instagram, tiktok, twitter, youtube)
+      INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, bio, photo_url, location, email, instagram, tiktok, twitter, youtube, user_id)
       VALUES (
         ${fields.ownerName},
         ${fields.dogName},
@@ -186,7 +216,8 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
         ${fields.instagram || null},
         ${fields.tiktok || null},
         ${fields.twitter || null},
-        ${fields.youtube || null}
+        ${fields.youtube || null},
+        ${sessionUser.id}
       )
       RETURNING id
     `;
@@ -204,10 +235,6 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
 
   return new Response(null, {
     status: 302,
-    headers: {
-      Location: "/match",
-      "Set-Cookie": `pawnder-profile-id=${profileId}; Path=/; Max-Age=31536000; SameSite=Lax`,
-      "Cache-Control": NO_STORE,
-    },
+    headers: { Location: "/match", "Cache-Control": NO_STORE },
   });
 }

@@ -12,9 +12,16 @@ const inputClass =
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 
 function CreateProfilePage() {
+  const search = (Route.useSearch() as any) ?? {};
+  const verified = String(search?.verified ?? "") === "1";
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader active="match" />
+      {verified && (
+        <div className="bg-green-50 px-6 py-3 text-center text-sm font-medium text-green-700">
+          ✅ Email verified — now create your dog's profile to start matching!
+        </div>
+      )}
 
       {/* Form */}
       <section className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-12">

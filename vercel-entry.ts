@@ -12,6 +12,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import handler from "./dist/server/server.js";
 import { handleRegisterPost } from "./register-handler.ts";
+import { handleAuthPost } from "./auth-handler.ts";
+import { handleAuthPost } from "./auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
@@ -50,6 +52,44 @@ export default async function vercelHandler(
     // Native POST /register — sign-up form posts here. Handle it before the SSR
     // handler (which would render HTML for it instead) and before the generic
     // Cache-Control override below, since the redirect must stay no-store.
+    // Native auth endpoints (POST /auth/*, GET /auth/me) — handled pre-SSR.
+    if (
+      (request.method === "POST" && new URL(request.url).pathname.startsWith("/auth/")) ||
+      (request.method === "GET" && new URL(request.url).pathname === "/auth/me")
+    ) {
+      const authRes = await handleAuthPost(request);
+      res.statusCode = authRes.status;
+      authRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (authRes.body) {
+        const reader = authRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+    // Native auth endpoints (POST /auth/*, GET /auth/me) — handled pre-SSR.
+    if (
+      (request.method === "POST" && new URL(request.url).pathname.startsWith("/auth/")) ||
+      (request.method === "GET" && new URL(request.url).pathname === "/auth/me")
+    ) {
+      const authRes = await handleAuthPost(request);
+      res.statusCode = authRes.status;
+      authRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (authRes.body) {
+        const reader = authRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
     if (request.method === "POST" && new URL(request.url).pathname === "/register") {
       const registerRes = await handleRegisterPost(request);
       res.statusCode = registerRes.status;

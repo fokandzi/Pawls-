@@ -178,6 +178,30 @@ export const SEO = {
   } as SEOPage,
 
   press: {
+    title: "Press — Pawls",
+    description: "Pawls press information.",
+  },
+  login: {
+    title: "Log in — Pawls",
+    description: "Log in to Pawls to match, book and connect with the dog community.",
+  },
+  "forgot-password": {
+    title: "Reset your password — Pawls",
+    description: "Request a password reset link for your Pawls account.",
+  },
+  "reset-password": {
+    title: "Choose a new password — Pawls",
+    description: "Set a new password for your Pawls account.",
+  },
+  "verify-email": {
+    title: "Verify your email — Pawls",
+    description: "Confirm your email address to activate your Pawls account.",
+  },
+  settings: {
+    title: "Account settings — Pawls",
+    description: "Manage your Pawls account: email verification, password and account deletion.",
+  },
+  press: {
     title: "Press Kit — Pawls | Media Resources & Brand Assets",
     description:
       "Pawls press kit for journalists and media professionals. Download brand assets (logos, wordmarks), key stats, founder info, app screenshots, and media contact details.",

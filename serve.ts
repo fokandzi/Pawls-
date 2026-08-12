@@ -13,6 +13,8 @@
 import handler from "./dist/server/server.js";
 import { handleStripeWebhook } from "./webhook-handler.ts";
 import { handleRegisterPost } from "./register-handler.ts";
+import { handleAuthPost } from "./auth-handler.ts";
+import { handleAuthPost } from "./auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
@@ -52,6 +54,24 @@ for (let attempt = 1; ; attempt++) {
         // before the SSR handler (which would render HTML for it instead).
         if (req.method === "POST" && pathname === "/register") {
           return handleRegisterPost(req);
+        }
+
+        // Native auth endpoints (POST /auth/*, GET /auth/me) — handled pre-SSR
+        // so they never fall through to the SSR handler.
+        if (req.method === "POST" && pathname.startsWith("/auth/")) {
+          return handleAuthPost(req);
+        }
+        if (req.method === "GET" && pathname === "/auth/me") {
+          return handleAuthPost(req);
+        }
+
+        // Native auth endpoints (POST /auth/*, GET /auth/me) — handled pre-SSR
+        // so they never fall through to the SSR handler.
+        if (req.method === "POST" && pathname.startsWith("/auth/")) {
+          return handleAuthPost(req);
+        }
+        if (req.method === "GET" && pathname === "/auth/me") {
+          return handleAuthPost(req);
         }
 
         // Native POST /match/create — dog profile form posts here. Handled

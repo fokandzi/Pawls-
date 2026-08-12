@@ -71,13 +71,34 @@ function RegisterPage() {
 
             <div>
               <label
+                htmlFor="date_of_birth"
+                className="mb-1.5 block text-sm font-semibold text-gray-800"
+              >
+                Your date of birth
+              </label>
+              <input
+                id="date_of_birth"
+                name="date_of_birth"
+                type="date"
+                required
+                max="2010-08-12"
+                className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
+              />
+              <p className="mt-1.5 text-xs text-gray-500">You must be at least 16 years old to use Pawls.</p>
+            </div>
+            <div>
+              <label
                 htmlFor="password"
                 className="mb-1.5 block text-sm font-semibold text-gray-800"
               >
-                Password
+                Password (8+ characters)
               </label>
               <input
                 id="password"
+                minLength={8}
+                maxLength={128}
+                minLength={8}
+                maxLength={128}
                 name="password"
                 type="password"
                 required
