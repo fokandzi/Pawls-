@@ -158,12 +158,21 @@ async function handleLogin(request: Request): Promise<Response> {
   if (rl.limited) return rateLimitedResponse(rl.retryAfterSeconds);
   try {
     await ensureAuthTables();
-    const rows = await sql()`SELECT id, email, name, password_hash FROM users WHERE lower(email) = lower(${email}) LIMIT 1`;
+    const rows = await sql()`SELECT id, email, name, password_hash, suspended_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1`;
     const user = rows[0] as any;
     const ok = user ? await verifyPassword(password, user.password_hash) : false;
     if (!user || !ok) {
       // Same message for unknown email vs wrong password (no enumeration).
       return htmlPage("Invalid email or password", '<p><a href="/forgot-password" style="color:#C95D43">Forgot your password?</a></p>', 401);
+    }
+    if (user.suspended_at) {
+      // Honest suspension gate: a suspended account cannot log in. The
+      // suspension itself is a real DB state set by an admin (safety phase).
+      return htmlPage(
+        "Account suspended",
+        "<p>This account is currently suspended. Contact Pawls support if you believe this is a mistake.</p>",
+        403,
+      );
     }
     if (isLegacySha256Hash(user.password_hash)) {
       await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${user.id}`;

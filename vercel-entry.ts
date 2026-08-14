@@ -15,6 +15,7 @@ import { handleRegisterPost } from "./register-handler.ts";
 import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
+import { handleSafetyApi } from "./safety-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 const fetchHandler = handler as {
@@ -125,6 +126,22 @@ export default async function vercelHandler(
       matchRes.headers.forEach((value, key) => res.setHeader(key, value));
       if (matchRes.body) {
         const reader = matchRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+    // Safety/Admin API (GET + POST /api/safety/*) — handled pre-SSR.
+    if (new URL(request.url).pathname.startsWith("/api/safety/")) {
+      const safetyRes = await handleSafetyApi(request);
+      res.statusCode = safetyRes.status;
+      safetyRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (safetyRes.body) {
+        const reader = safetyRes.body.getReader();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;

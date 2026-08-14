@@ -95,6 +95,12 @@ export const SEO = {
     path: "/match/conversations",
     noIndex: true,
   } as SEOPage,
+  "admin/moderation": {
+    title: "Moderation — Pawls",
+    description: "Pawls moderation queue.",
+    path: "/admin/moderation",
+    noIndex: true,
+  } as SEOPage,
 
   book: {
     title: "Dog Services — Walkers, Groomers, Sitters & Vets | Pawls",

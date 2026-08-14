@@ -16,6 +16,7 @@ import { handleRegisterPost } from "./register-handler.ts";
 import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
+import { handleSafetyApi } from "./safety-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
@@ -75,6 +76,10 @@ for (let attempt = 1; ; attempt++) {
         // JSON endpoints never fall through to the SSR HTML handler.
         if (pathname.startsWith("/api/match/")) {
           return handleMatchApi(req);
+        }
+        // Safety/Admin API (GET + POST /api/safety/*) — same pre-SSR pattern.
+        if (pathname.startsWith("/api/safety/")) {
+          return handleSafetyApi(req);
         }
 
         // Native POST /api/waitlist — landing-page waitlist form posts here.

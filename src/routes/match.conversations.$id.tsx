@@ -1,9 +1,10 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { seoHead, SEO } from "../lib/seo";
 import { t, normalizeLang, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
+import { ReportModal, safetyPost } from "../lib/safety-ui";
 
 type Message = {
   id: number;
@@ -29,6 +30,8 @@ type ConversationMeta = {
   last_message_at: string | null;
 };
 
+type RelStatus = { blockedByMe: boolean; blockedMe: boolean; matchState: "active" | "unmatched" | "none" };
+
 export const Route = createFileRoute("/match/conversations/$id")({
   head: () => seoHead(SEO["match/conversations/$id"]),
   component: ConversationThreadPage,
@@ -36,6 +39,7 @@ export const Route = createFileRoute("/match/conversations/$id")({
 
 function ConversationThreadPage() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
   const [lang, setLang] = useState<Lang>("fr");
   const [meId, setMeId] = useState<number | null>(null);
   const [conversation, setConversation] = useState<ConversationMeta | null>(null);
@@ -46,6 +50,14 @@ function ConversationThreadPage() {
   const [sending, setSending] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Safety: relation status + action UI
+  const [rel, setRel] = useState<RelStatus | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: "user" | "message"; id: number; name: string | null } | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const conversationId = Number(id);
 
@@ -67,6 +79,12 @@ function ConversationThreadPage() {
         setConversation(data.conversation);
         setMessages(data.messages);
         setStatus("ready");
+        // Relation status for block/unblock/unmatch buttons (404 = no
+        // relationship: leave rel null, buttons stay hidden).
+        fetch(`/api/safety/status?userId=${encodeURIComponent(data.conversation.other_user_id)}`, { headers: { accept: "application/json" } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((s) => { if (s?.ok) setRel({ blockedByMe: s.blockedByMe, blockedMe: s.blockedMe, matchState: s.matchState }); })
+          .catch(() => {});
         // Opening a conversation marks the counterpart's messages read.
         // GETs never mutate — this is the dedicated read endpoint.
         fetch(`/api/match/conversations/${conversationId}/read`, {
@@ -132,6 +150,27 @@ function ConversationThreadPage() {
   }
 
   const L = lang;
+  const otherName = conversation?.dog_name ?? conversation?.owner_name ?? "…";
+
+  async function runAction(path: string, okKey: string) {
+    if (!conversation || busy) return;
+    setBusy(true);
+    setActionMsg(null);
+    setActionErr(null);
+    try {
+      const res = await safetyPost(path, { userId: conversation.other_user_id });
+      if (!res.ok) {
+        setActionErr(res.status === 429 ? t("safety.tooMany", L) : t("safety.genericError", L));
+        return;
+      }
+      setActionMsg(t(okKey, L).replace("{name}", otherName));
+      setTimeout(() => navigate({ to: "/match/conversations" }), 1200);
+    } catch {
+      setActionErr(t("safety.genericError", L));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function formatTime(dateStr: string) {
     try {
@@ -182,13 +221,71 @@ function ConversationThreadPage() {
                 <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--pawls-cream-50)] text-xl">
                   {conversation.photo_url ? <img src={conversation.photo_url} alt={conversation.dog_name ?? ""} className="h-full w-full object-cover" /> : "🐶"}
                 </div>
-                <div className="min-w-0">
-                  <h2 className="truncate text-base font-bold text-gray-900">{conversation.dog_name ?? conversation.owner_name ?? "—"}</h2>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-base font-bold text-gray-900">
+                    {conversation.dog_name ?? conversation.owner_name ?? "—"}
+                    {rel?.blockedByMe && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{t("safety.blockedBadge", L)}</span>}
+                  </h2>
                   <p className="truncate text-xs text-gray-500">
                     {[conversation.breed, conversation.city ?? conversation.location].filter(Boolean).join(" · ") || "…"}
                   </p>
                 </div>
+
+                {/* Safety actions menu */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    aria-label={t("safety.actions", L)}
+                    aria-expanded={menuOpen}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-[var(--pawls-cream-50)] hover:text-gray-600"
+                  >⋯</button>
+                  {menuOpen && (
+                    <div className="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-[var(--pawls-cream-100)] bg-white py-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => { setMenuOpen(false); setReportTarget({ type: "user", id: conversation.other_user_id, name: otherName }); }}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[var(--pawls-cream-50)]"
+                      >{t("safety.reportUser", L).replace("{name}", otherName)}</button>
+                      {rel?.blockedByMe ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => { setMenuOpen(false); runAction("/api/safety/unblock", "safety.unblockDone"); }}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[var(--pawls-cream-50)] disabled:opacity-50"
+                        >{t("safety.unblock", L)}</button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            if (!window.confirm(t("safety.blockConfirm", L).replace("{name}", otherName))) return;
+                            runAction("/api/safety/block", "safety.blockDone");
+                          }}
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[var(--pawls-cream-50)] disabled:opacity-50"
+                        >{t("safety.blockUser", L).replace("{name}", otherName)}</button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          if (!window.confirm(t("safety.unmatchConfirm", L).replace("{name}", otherName))) return;
+                          runAction("/api/safety/unmatch", "safety.unmatchDone");
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[var(--pawls-cream-50)] disabled:opacity-50"
+                      >{t("safety.unmatch", L)}</button>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {(actionMsg || actionErr) && (
+                <div className={`px-4 py-2 text-xs font-medium ${actionErr ? "bg-red-50 text-red-600" : "bg-green-50 text-green-700"}`}>
+                  {actionMsg ?? actionErr}
+                </div>
+              )}
 
               <div className="flex h-[50vh] flex-col overflow-y-auto bg-[var(--pawls-cream-50)]/40 px-4 py-4">
                 {messages.length === 0 ? (
@@ -203,7 +300,15 @@ function ConversationThreadPage() {
                     {messages.map((msg) => {
                       const isMine = meId !== null && msg.sender_user_id === meId;
                       return (
-                        <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                        <div key={msg.id} className={`group flex items-end gap-1.5 ${isMine ? "justify-end" : "justify-start"}`}>
+                          {!isMine && (
+                            <button
+                              type="button"
+                              onClick={() => setReportTarget({ type: "message", id: msg.id, name: otherName })}
+                              aria-label={t("safety.reportMessage", L)}
+                              className="mb-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs text-gray-300 opacity-0 transition-opacity hover:bg-white hover:text-[var(--pawls-terracotta-500)] group-hover:opacity-100"
+                            >⚑</button>
+                          )}
                           <div
                             className={`max-w-[78%] rounded-2xl px-4 py-2.5 ${
                               isMine
@@ -257,6 +362,15 @@ function ConversationThreadPage() {
           )}
         </div>
       </section>
+      {reportTarget && (
+        <ReportModal
+          lang={lang}
+          targetType={reportTarget.type}
+          targetId={reportTarget.id}
+          targetName={reportTarget.name}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
       <AppFooter />
     </>
   );

@@ -100,7 +100,8 @@ export async function getSessionUser(request: Request): Promise<SessionUser | nu
     const rows = await sql()`
       SELECT s.id AS session_id, s.expires_at, s.revoked_at,
              u.id, u.email, u.name, u.role, u.email_verified_at,
-             u.preferred_language, u.country, u.city, u.timezone
+             u.preferred_language, u.country, u.city, u.timezone,
+             u.suspended_at
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ${tokenHash}
@@ -108,6 +109,10 @@ export async function getSessionUser(request: Request): Promise<SessionUser | nu
     `;
     const row = rows[0] as any;
     if (!row) return null;
+    // Suspended accounts are inert: every session dies at the gate. This is
+    // the enforcement side of the Safety phase's "suspend user" admin action
+    // (users.suspended_at set by an admin; see migration 004 + safety-core).
+    if (row.suspended_at) return null;
     const expiresAt = new Date(row.expires_at);
     if (row.revoked_at || expiresAt.getTime() <= Date.now()) {
       return null;
