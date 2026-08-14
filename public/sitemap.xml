@@ -2,51 +2,55 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://pawls.club/</loc>
-    <changefreq>daily</changefreq>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://pawls.club/match</loc>
-    <changefreq>daily</changefreq>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://pawls.club/book</loc>
-    <changefreq>daily</changefreq>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://pawls.club/breed</loc>
-    <changefreq>daily</changefreq>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://pawls.club/rescue</loc>
-    <changefreq>daily</changefreq>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://pawls.club/connect</loc>
-    <changefreq>daily</changefreq>
+    <lastmod>2026-08-14</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://pawls.club/venues</loc>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://pawls.club/plus</loc>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://pawls.club/breed/register</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://pawls.club/book/register</loc>
+    <loc>https://pawls.club/press</loc>
+    <lastmod>2026-08-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
