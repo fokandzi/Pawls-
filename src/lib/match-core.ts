@@ -231,6 +231,7 @@ export async function recordSwipe(
 export interface MatchInfo {
   id: number;
   other_dog_id: number;
+  owner_user_id: number | null;
   dog_name: string;
   breed: string;
   size: string | null;
@@ -266,7 +267,8 @@ export async function matchesForUser(sessionUserId: number, sessionUserIsTest: b
   const dogs = await q`
     SELECT
       dp.id, dp.dog_name, dp.breed, dp.size, dp.energy_level, dp.temperament,
-      dp.bio, dp.photo_url, dp.location, dp.city, u.name AS owner_name
+      dp.bio, dp.photo_url, dp.location, dp.city, u.name AS owner_name,
+      u.id AS owner_user_id
     FROM dog_profiles dp
     JOIN users u ON u.id = dp.user_id
     WHERE dp.id = ANY(${ids})
@@ -284,6 +286,7 @@ export async function matchesForUser(sessionUserId: number, sessionUserIsTest: b
       return {
         id: Number(r.id),
         other_dog_id: Number(r.other_dog_id),
+        owner_user_id: d.owner_user_id === null || d.owner_user_id === undefined ? null : Number(d.owner_user_id),
         dog_name: String(d.dog_name),
         breed: String(d.breed),
         size: d.size ?? null,

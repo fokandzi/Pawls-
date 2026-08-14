@@ -27,7 +27,7 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
       WHERE user_id = ${user.id} OR (user_id IS NULL AND lower(email) = lower(${user.email}))
     ` as any;
     const dogIds = (dogRows as Array<{ id: number }>).map((r) => Number(r.id));
-    const [hasSwipes, hasMatches, hasMessages, hasBookings, hasSubscriptions, hasReferrals] =
+    const [hasSwipes, hasMatches, hasMessages, hasBookings, hasSubscriptions, hasReferrals, hasConversations] =
       await Promise.all([
         tableExists("swipes"),
         tableExists("matches"),
@@ -35,6 +35,7 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
         tableExists("bookings"),
         tableExists("subscriptions"),
         tableExists("referrals"),
+        tableExists("conversations"),
       ]);
     await sql().transaction((tx) => {
       const q: any[] = [
@@ -51,6 +52,14 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
       if (hasBookings) {
         q.push(tx`UPDATE bookings SET customer_name = 'Deleted user', customer_email = 'deleted@example.invalid'
                   WHERE lower(customer_email) = lower(${user.email})`);
+      }
+      // Conversations the user participated in are deleted with the account
+      // (messages + participant rows cascade via FK). This is the documented
+      // deletion policy: a deleted user leaves no conversation artifacts.
+      if (hasConversations) {
+        q.push(tx`DELETE FROM conversations WHERE id IN (
+          SELECT conversation_id FROM conversation_participants WHERE user_id = ${user.id}
+        )`);
       }
       if (hasSubscriptions) q.push(tx`DELETE FROM subscriptions WHERE lower(email) = lower(${user.email})`);
       if (hasReferrals) {

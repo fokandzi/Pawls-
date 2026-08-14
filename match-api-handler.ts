@@ -28,6 +28,13 @@ import {
   setUserLanguage,
   getMyDogs,
 } from "./src/lib/match-core";
+import {
+  getOrCreateConversation,
+  conversationsForUser,
+  conversationView,
+  sendMessage,
+  markConversationRead,
+} from "./src/lib/message-core";
 
 const NO_STORE = "no-store, max-age=0, must-revalidate";
 
@@ -207,8 +214,88 @@ export async function handleMatchApi(request: Request): Promise<Response> {
       }
     }
 
-    default:
-      return badJson("Not found", 404);
+    // ── Messaging: conversation list (GET only; never mutates) ───────────
+    case "/api/match/conversations": {
+      if (request.method !== "GET") return badJson("GET required", 405);
+      if (!sessionUser) return json({ error: "UNAUTHENTICATED", message: "Please log in to continue." }, 401);
+      try {
+        const [isTestRows] = await sql()`SELECT is_test FROM users WHERE id = ${sessionUser.id}`;
+        const isTest = !!((isTestRows as any)?.is_test);
+        const conversations = await conversationsForUser(sessionUser.id, isTest);
+        return json({ conversations });
+      } catch (err) {
+        console.error("[match-api] conversations failed", err);
+        return json({ error: "DB_UNAVAILABLE", message: "We couldn't load your conversations right now. Please try again in a moment." }, 503);
+      }
+    }
+
+    // ── Messaging: start (get-or-create) a conversation with a matched user ──
+    case "/api/match/conversations/start": {
+      if (request.method !== "POST") return badJson("POST required", 405);
+      const csrf = assertSameOrigin(request);
+      if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+      if (!sessionUser) return json({ ok: false, error: "UNAUTHENTICATED", message: "Please log in to continue." }, 401);
+      const body = await readBody(request);
+      const otherUserId = num(body.otherUserId ?? body.userId);
+      if (otherUserId === null) return badJson("otherUserId is required");
+      try {
+        const [isTestRows] = await sql()`SELECT is_test FROM users WHERE id = ${sessionUser.id}`;
+        const isTest = !!((isTestRows as any)?.is_test);
+        const result = await getOrCreateConversation(sessionUser.id, isTest, otherUserId);
+        if (!result.ok) return json(result, result.status);
+        return json({ ok: true, conversationId: result.conversationId });
+      } catch (err) {
+        console.error("[match-api] conversation start failed", err);
+        return json({ ok: false, error: "DB_UNAVAILABLE", message: "We couldn't start this conversation right now." }, 503);
+      }
+    }
+
+    default: {
+      // ── Messaging: conversation view / send / mark-read (id-based) ──────
+      const convMatch = pathname.match(/^\/api\/match\/conversations\/(\d+)$/);
+      const msgMatch = pathname.match(/^\/api\/match\/conversations\/(\d+)\/messages$/);
+      const readMatch = pathname.match(/^\/api\/match\/conversations\/(\d+)\/read$/);
+      const conversationId = (convMatch ?? msgMatch ?? readMatch)?.[1]
+        ? Number((convMatch ?? msgMatch ?? readMatch)![1])
+        : null;
+
+      if (conversationId === null) return badJson("Not found", 404);
+      if (!sessionUser) return json({ error: "UNAUTHENTICATED", message: "Please log in to continue." }, 401);
+
+      try {
+        const [isTestRows] = await sql()`SELECT is_test FROM users WHERE id = ${sessionUser.id}`;
+        const isTest = !!((isTestRows as any)?.is_test);
+        void isTest; // membership gates below are user-level (test parity is enforced at creation)
+
+        if (convMatch && request.method === "GET") {
+          const view = await conversationView(sessionUser.id, conversationId);
+          if (!view) return json({ error: "NOT_FOUND", message: "Conversation not found." }, 404);
+          return json(view);
+        }
+
+        if (msgMatch && request.method === "POST") {
+          const csrf = assertSameOrigin(request);
+          if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+          const body = await readBody(request);
+          const result = await sendMessage(sessionUser.id, conversationId, body.body, body.senderProfileId);
+          if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+          return json({ ok: true, message: result.message });
+        }
+
+        if (readMatch && request.method === "POST") {
+          const csrf = assertSameOrigin(request);
+          if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+          const result = await markConversationRead(sessionUser.id, conversationId);
+          if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+          return json({ ok: true, readCount: result.readCount });
+        }
+
+        return badJson("Method not allowed", 405);
+      } catch (err) {
+        console.error("[match-api] conversation request failed", err);
+        return json({ error: "DB_UNAVAILABLE", message: "We couldn't process this request right now." }, 503);
+      }
+    }
   }
 }
 

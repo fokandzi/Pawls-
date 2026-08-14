@@ -83,6 +83,18 @@ export const SEO = {
       "View your dog's playdate matches. Chat with other dog owners and arrange meetups at dog-friendly venues.",
     path: "/match/matches",
   } as SEOPage,
+  "match/conversations": {
+    title: "Your Messages — Pawls",
+    description: "Chat with your dog's matches on Pawls. Private 1:1 conversations with owners you've matched with.",
+    path: "/match/conversations",
+    noIndex: true,
+  } as SEOPage,
+  "match/conversations/$id": {
+    title: "Conversation — Pawls",
+    description: "Private conversation with a Pawls match.",
+    path: "/match/conversations",
+    noIndex: true,
+  } as SEOPage,
 
   book: {
     title: "Dog Services — Walkers, Groomers, Sitters & Vets | Pawls",

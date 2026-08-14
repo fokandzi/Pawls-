@@ -8,6 +8,7 @@ import { LangToggle } from "../lib/lang-toggle";
 type MatchRow = {
   id: number;
   other_dog_id: number;
+  owner_user_id: number | null;
   dog_name: string;
   breed: string;
   size: string | null;
@@ -121,13 +122,29 @@ function MatchesPage() {
                     <p className="text-sm text-gray-500">{m.breed}</p>
                     <p className="mt-0.5 text-xs text-gray-400">{t("matches.matchedOn", L).replace("{date}", formatDate(m.created_at))}</p>
                   </div>
-                  <Link to="/match" className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white">{t("match.pass", L) === "Passer" ? "Continuer →" : "Keep swiping →"}</Link>
+                  <div className="flex items-center gap-2">
+                    {m.owner_user_id ? (
+                      <Link
+                        to="/match/conversations"
+                        search={{ with: String(m.owner_user_id) }}
+                        className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white"
+                      >
+                        💬 {t("msg.send", L)}
+                      </Link>
+                    ) : (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-cream-200)] px-4 py-1.5 text-xs font-semibold text-gray-400">
+                        💬 {t("msg.send", L)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
 
           <div className="mt-8 text-center">
+            <Link to="/match/conversations" className="text-sm font-medium text-[var(--pawls-terracotta-500)]">💬 {t("msg.heading", L)}</Link>
+            <span className="mx-2 text-gray-300">·</span>
             <Link to="/match" className="text-sm font-medium text-[var(--pawls-terracotta-500)]">{t("matches.backToSwiping", L)}</Link>
             <span className="mx-2 text-gray-300">·</span>
             <Link to="/match/my-dogs" className="text-sm font-medium text-[var(--pawls-terracotta-500)]">{t("match.manageDogs", L)}</Link>
