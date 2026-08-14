@@ -159,14 +159,6 @@ export const SEO = {
     path: "/plus",
   } as SEOPage,
 
-  "plus/success": {
-    title: "Thank You — Pawls",
-    description:
-      "Thank you for supporting Pawls. Your payment was received — premium features are coming soon and Plus members get early access.",
-    path: "/plus/success",
-    noIndex: true,
-  } as SEOPage,
-
   "book/booking-success": {
     title: "Booking Confirmed — Pawls",
     description: "Your dog service booking has been confirmed. View details and manage your appointment.",

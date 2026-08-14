@@ -14,6 +14,7 @@ type Breeder = {
   years_experience: number;
   health_testing: string;
   image_url: string | null;
+  is_demo: boolean;
 };
 
 type Litter = {
@@ -40,7 +41,7 @@ const getBreederDetail = createServerFn({ method: "POST" })
       await createBreedTables();
 
       const [breeder] = await sql()`
-        SELECT id, name, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing, image_url
+        SELECT id, name, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing, image_url, is_demo
         FROM breeders
         WHERE id = ${data.breederId}
       ` as Breeder[];
@@ -75,9 +76,13 @@ function membershipBadge(tier: string) {
   return null;
 }
 
-function verificationBadge(status: string) {
-  // Honest display: verification is not real yet — all current listings are demo profiles.
-  if (status === "verified" || status === "featured") return { label: " Demo listing", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
+function verificationBadge(status: string, isDemo: boolean) {
+  // Honest display (owner directive 2026-08-14): demo fixture breeders must
+  // NEVER look like genuine pending applicants — a demo row ALWAYS shows
+  // "Demo listing", regardless of its verification_status column. Only real
+  // (non-demo) rows may show a status badge ("Verified" / "⏳ Pending").
+  if (isDemo) return { label: " Demo listing", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
+  if (status === "verified" || status === "featured") return { label: " Verified", bg: "bg-emerald-100", text: "text-emerald-700" };
   return { label: "⏳ Pending Verification", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
 }
 
@@ -151,8 +156,10 @@ function BreederDetailPage() {
     );
   }
 
-  const vb = verificationBadge(breeder.verification_status);
-  const mb = membershipBadge(breeder.membership_tier);
+  const vb = verificationBadge(breeder.verification_status, breeder.is_demo);
+  // P0 Data: membership tier badges are fabricated for fixture rows — only
+  // show them for real breeders (same rule as the list page).
+  const mb = breeder.is_demo ? null : membershipBadge(breeder.membership_tier);
   const healthTests = breeder.health_testing ? breeder.health_testing.split(",").map((t: string) => t.trim()) : [];
 
   return (

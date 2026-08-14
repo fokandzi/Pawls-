@@ -257,6 +257,7 @@ export const createBreedTables = createServerFn({ method: "POST" }).handler(
         years_experience INTEGER DEFAULT 0,
         health_testing TEXT,
         image_url TEXT,
+        is_demo BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;

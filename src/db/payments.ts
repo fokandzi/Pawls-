@@ -96,68 +96,6 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
     }
   });
 
-type PlusCheckoutInput = Record<string, never>;
-
-export const createPlusCheckout = createServerFn({ method: "POST" })
-  .validator((data: unknown): PlusCheckoutInput => {
-    // No input needed — fixed price for Pawls Plus
-    return {};
-  })
-  .handler(async (): Promise<CheckoutResult> => {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey) {
-      return { error: "Payments not configured" };
-    }
-
-    const stripe = getStripe();
-
-    let host = "http://localhost:3000";
-    try {
-      const reqHost = process.env.VERCEL_URL || process.env.PUBLIC_HOST;
-      if (reqHost) {
-        host = `https://${reqHost}`;
-      }
-    } catch {
-      // fall back to localhost
-    }
-
-    try {
-      const session = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        success_url: `${host}/plus/success`,
-        cancel_url: `${host}/plus`,
-        line_items: [
-          {
-            price_data: {
-              currency: "eur",
-              product_data: {
-                name: "Pawls Plus",
-                description: "Unlimited swipes, advanced filters, priority booking, verified badge — €8/month",
-              },
-              unit_amount: 800,
-              recurring: {
-                interval: "month",
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        metadata: {
-          plan: "pawnder-plus",
-        },
-      });
-
-      if (!session.url) {
-        return { error: "Failed to create checkout session" };
-      }
-
-      return { url: session.url };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Stripe error";
-      return { error: message };
-    }
-  });
-
 export const createMembershipCheckout = createServerFn({ method: "POST" })
   .validator((data: unknown): MembershipCheckoutInput => {
     if (typeof data !== "object" || data === null) {

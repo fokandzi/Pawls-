@@ -44,17 +44,19 @@ function LockIcon() {
  * Stripe payments, breeder verification, rescue partnerships and premium
  * features are NOT live yet, so nothing here references them.
  */
-export function TrustBadges() {
+import { t, DEFAULT_LANG, type Lang } from "../i18n";
+
+export function TrustBadges({ lang = DEFAULT_LANG }: { lang?: Lang }) {
   const badges = [
-    { icon: <LockIcon />, label: "Free to use during beta", sublabel: "No hidden costs" },
-    { icon: <LockIcon />, label: "Every demo listing is labelled", sublabel: "No fake accounts" },
+    { icon: <LockIcon />, label: t("home.trustBetaTitle", lang), sublabel: t("home.trustBetaSub", lang) },
+    { icon: <LockIcon />, label: t("home.trustDemoTitle", lang), sublabel: t("home.trustDemoSub", lang) },
   ];
 
   return (
     <div
       className="flex flex-wrap items-center justify-center gap-4 sm:gap-8"
       role="list"
-      aria-label="Trust badges"
+      aria-label={t("home.trustAria", lang)}
     >
       {badges.map((badge) => (
         <div key={badge.label} role="listitem">

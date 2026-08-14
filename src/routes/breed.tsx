@@ -300,11 +300,16 @@ function membershipBadge(tier: string) {
   return null;
 }
 
-function verificationBadge(status: string) {
-  // Honest display: verification is not real yet — all current listings are
-  // demo profiles (Phase 1b handles the seeded data itself).
-  if (status === "verified" || status === "featured") {
+function verificationBadge(status: string, isDemo: boolean) {
+  // Honest display (owner directive 2026-08-14): demo fixture breeders must
+  // NEVER look like genuine pending applicants — a demo row ALWAYS shows
+  // "Demo listing", regardless of its verification_status column. Only real
+  // (non-demo) rows may show a status badge ("Verified" / "⏳ Pending").
+  if (isDemo) {
     return { label: " Demo listing", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
+  }
+  if (status === "verified" || status === "featured") {
+    return { label: " Verified", bg: "bg-emerald-100", text: "text-emerald-700" };
   }
   return { label: "⏳ Pending", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
 }
@@ -420,7 +425,7 @@ function BreedPage() {
                       // P0 Data: membership tier badges are fabricated for
                       // fixture rows — only show them for real breeders.
                       const mb = breeder.is_demo ? null : membershipBadge(breeder.membership_tier);
-                      const vb = verificationBadge(breeder.verification_status);
+                      const vb = verificationBadge(breeder.verification_status, breeder.is_demo);
                       const emoji = breederEmoji(breeder.breed_specialty);
 
                       return (

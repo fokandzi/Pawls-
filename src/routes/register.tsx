@@ -1,13 +1,21 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 export const Route = createFileRoute("/register")({
-  head: () => seoHead(SEO.register),
+  head: () =>
+    seoHead({
+      title: t("auth.register.seoTitle", DEFAULT_LANG),
+      description: t("auth.register.seoDesc", DEFAULT_LANG),
+      path: "/register",
+    }),
   component: RegisterPage,
 });
 
 function RegisterPage() {
+  const L: Lang = DEFAULT_LANG;
+
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader />
@@ -15,16 +23,13 @@ function RegisterPage() {
         <div className="mx-auto w-full max-w-md">
           <div className="text-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--pawls-cream-100)] px-4 py-1.5 text-sm font-semibold text-[var(--pawls-ink-700)]">
-              Free account
+              {t("auth.register.freeAccount", L)}
             </span>
             <h1 className="mt-6 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Create your{" "}
-              <span className="text-[var(--pawls-terracotta-500)]">Pawls</span>{" "}
-              account
+              {t("auth.register.heading", L)}
             </h1>
             <p className="mt-3 text-base text-gray-600 sm:text-lg">
-              Join dog people near you — match playmates, book services, and
-              discover everything your dog needs in one place.
+              {t("auth.register.sub", L)}
             </p>
           </div>
 
@@ -38,7 +43,7 @@ function RegisterPage() {
                 htmlFor="name"
                 className="mb-1.5 block text-sm font-semibold text-gray-800"
               >
-                Your name
+                {t("auth.name", L)}
               </label>
               <input
                 id="name"
@@ -46,7 +51,7 @@ function RegisterPage() {
                 type="text"
                 required
                 autoComplete="name"
-                placeholder="Jane Doe"
+                placeholder={t("auth.namePlaceholder", L)}
                 className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 placeholder:text-gray-400 transition-shadow focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
               />
             </div>
@@ -56,7 +61,7 @@ function RegisterPage() {
                 htmlFor="email"
                 className="mb-1.5 block text-sm font-semibold text-gray-800"
               >
-                Email address
+                {t("auth.email", L)}
               </label>
               <input
                 id="email"
@@ -64,7 +69,7 @@ function RegisterPage() {
                 type="email"
                 required
                 autoComplete="email"
-                placeholder="you@example.com"
+                placeholder={t("auth.emailPlaceholder", L)}
                 className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 placeholder:text-gray-400 transition-shadow focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
               />
             </div>
@@ -74,7 +79,7 @@ function RegisterPage() {
                 htmlFor="date_of_birth"
                 className="mb-1.5 block text-sm font-semibold text-gray-800"
               >
-                Your date of birth
+                {t("auth.dob", L)}
               </label>
               <input
                 id="date_of_birth"
@@ -84,19 +89,17 @@ function RegisterPage() {
                 max="2010-08-12"
                 className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
               />
-              <p className="mt-1.5 text-xs text-gray-500">You must be at least 16 years old to use Pawls.</p>
+              <p className="mt-1.5 text-xs text-gray-500">{t("auth.dobHint", L)}</p>
             </div>
             <div>
               <label
                 htmlFor="password"
                 className="mb-1.5 block text-sm font-semibold text-gray-800"
               >
-                Password (8+ characters)
+                {t("auth.password", L)}
               </label>
               <input
                 id="password"
-                minLength={8}
-                maxLength={128}
                 minLength={8}
                 maxLength={128}
                 name="password"
@@ -104,7 +107,7 @@ function RegisterPage() {
                 required
                 minLength={6}
                 autoComplete="new-password"
-                placeholder="At least 6 characters"
+                placeholder={t("auth.passwordPlaceholder", L)}
                 className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 placeholder:text-gray-400 transition-shadow focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
               />
             </div>
@@ -113,29 +116,29 @@ function RegisterPage() {
               type="submit"
               className="inline-flex w-full items-center justify-center rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-[var(--pawls-terracotta-500)]/25 transition-colors duration-200 hover:bg-[var(--pawls-terracotta-700)]"
             >
-              Sign Up
+              {t("auth.signUp", L)}
             </button>
 
             <p className="text-center text-xs text-gray-400">
-              By signing up you agree to the{" "}
+              {t("auth.agreeTerms", L)}{" "}
               <Link to="/terms" className="underline hover:text-[var(--pawls-terracotta-500)]">
-                Terms
+                {t("auth.terms", L)}
               </Link>{" "}
-              and{" "}
+              {t("auth.andPrivacy", L)}{" "}
               <Link to="/privacy" className="underline hover:text-[var(--pawls-terracotta-500)]">
-                Privacy Policy
+                {t("auth.privacy", L)}
               </Link>
               .
             </p>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">
-            Already have an account?{" "}
+            {t("auth.haveAccount", L)}{" "}
             <Link
               to="/"
               className="font-semibold text-[var(--pawls-terracotta-500)] underline hover:text-[var(--pawls-terracotta-700)]"
             >
-              Go to the app
+              {t("auth.goToApp", L)}
             </Link>
           </p>
         </div>
