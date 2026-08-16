@@ -32,7 +32,7 @@ type ConversationMeta = {
 
 type RelStatus = { blockedByMe: boolean; blockedMe: boolean; matchState: "active" | "unmatched" | "none" };
 
-export const Route = createFileRoute("/match/conversations/$id")({
+export const Route = createFileRoute("/match/conversations_/$id")({
   head: () => seoHead(SEO["match/conversations/$id"]),
   component: ConversationThreadPage,
 });
