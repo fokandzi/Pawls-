@@ -176,7 +176,7 @@ function MatchesPage() {
                     {m.owner_user_id ? (
                       <Link
                         to="/match/conversations"
-                        search={{ with: String(m.owner_user_id) }}
+                        search={{ with: m.owner_user_id }}
                         className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white"
                       >
                         💬 {t("msg.send", L)}

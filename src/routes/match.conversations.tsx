@@ -45,7 +45,9 @@ function ConversationsPage() {
           const startRes = await fetch("/api/match/conversations/start", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ otherUserId: Number(withUserId) }),
+            // Tolerate both plain (?with=89) and JSON-quoted (?with="89") legacy
+            // params — the match-card link previously emitted JSON-encoded values.
+            body: JSON.stringify({ otherUserId: Number(String(withUserId).replace(/^"|"$/g, "")) }),
           });
           const startData = await startRes.json();
           if (cancelled) return;
