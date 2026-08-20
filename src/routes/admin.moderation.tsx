@@ -56,6 +56,15 @@ const TARGET_LABEL: Record<string, string> = {
   provider: "Prestataire",
 };
 
+const ACTION_LABEL: Record<string, string> = {
+  warn_user: "admin.actionWarn",
+  suspend_user: "admin.actionSuspend",
+  reinstate_user: "admin.actionReinstate",
+  remove_message: "admin.actionRemoveMessage",
+  unmatch: "admin.actionUnmatch",
+  block_user: "admin.actionBlock",
+};
+
 function ModerationPage() {
   const [lang, setLang] = useState<Lang>("fr");
   const [phase, setPhase] = useState<"loading" | "loggedOut" | "denied" | "ready">("loading");
@@ -217,7 +226,7 @@ function ModerationPage() {
                                 setBusyId(null);
                               }}
                               className="rounded-full border border-[var(--pawls-terracotta-500)]/30 px-4 py-1.5 text-xs font-semibold text-[var(--pawls-terracotta-700)] transition-colors hover:bg-[var(--pawls-terracotta-500)] hover:text-white disabled:opacity-50"
-                            >{t(`admin.action${a.charAt(0).toUpperCase()}${a.slice(1).replace(/_/g, "")}`, L)}</button>
+                            >{t(ACTION_LABEL[a] ?? a, L)}</button>
                           ))}
                         </div>
                       )}

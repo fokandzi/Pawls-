@@ -18,34 +18,34 @@ type Provider = {
 
 const categoryConfig: Record<
   string,
-  { label: string; bg: string; text: string; emoji: string }
+  { labelKey: string; bg: string; text: string; emoji: string }
 > = {
   walker: {
-    label: "Walker",
+    labelKey: "book.cat.walker",
     bg: "bg-emerald-100",
     text: "text-emerald-700",
     emoji: "",
   },
   groomer: {
-    label: "Groomer",
+    labelKey: "book.cat.groomer",
     bg: "bg-purple-100",
     text: "text-purple-700",
     emoji: "",
   },
   sitter: {
-    label: "Sitter",
+    labelKey: "book.cat.sitter",
     bg: "bg-sky-100",
     text: "text-sky-700",
     emoji: "",
   },
   trainer: {
-    label: "Trainer",
+    labelKey: "book.cat.trainer",
     bg: "bg-[var(--pawls-cream-100)]",
     text: "text-[var(--pawls-gold-500)]",
     emoji: "",
   },
   vet: {
-    label: "Vet",
+    labelKey: "book.cat.vet",
     bg: "bg-rose-100",
     text: "text-rose-700",
     emoji: "",
@@ -61,7 +61,8 @@ function renderStars(rating: number) {
   return stars.join("");
 }
 
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
   await createBookingTables();
@@ -82,24 +83,23 @@ const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const Route = createFileRoute("/book/")({
-  head: () => seoHead(SEO.book),
+  head: () => seoHead({ title: t("book.seoTitle", DEFAULT_LANG), description: t("book.seoDesc", DEFAULT_LANG) }),
   loader: () => loadProviders(),
   component: BookPage,
 });
 
 function BookPage() {
+  const L: Lang = DEFAULT_LANG;
   const { providers, error } = Route.useLoaderData();
   return (
     <>
           {/* Hero strip */}
           <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Book dog services
+              {t("book.heading", L)}
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-              Find and book trusted walkers, groomers, sitters, trainers, and vets
-              near you. Online booking is coming soon — approved providers will
-              appear here.
+              {t("book.subtitle", L)}
             </p>
           </section>
 
@@ -110,7 +110,7 @@ function BookPage() {
                 to="/book/register"
                 className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--pawls-terracotta-500)] bg-white px-6 py-3 text-sm font-semibold text-[var(--pawls-terracotta-500)] shadow-sm transition-all hover:bg-[var(--pawls-terracotta-500)] hover:text-white"
               >
-                 List Your Business — Free
+                 {t("book.listBusiness", L)}
               </Link>
             </div>
           </section>
@@ -120,15 +120,15 @@ function BookPage() {
             <div className="mx-auto max-w-6xl">
               {error || !providers || providers.length === 0 ? (
                 <EmptyState
-                  title="Bookings coming soon"
-                  description="We're onboarding trusted walkers, groomers, sitters, trainers, and vets. Providers joining soon — be the first to list your business."
+                  title={t("book.comingSoonTitle", L)}
+                  description={t("book.comingSoonBody", L)}
                 />
               ) : (
                 /* Provider cards grid */
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {providers.map((provider) => {
                     const cfg = categoryConfig[provider.category] ?? {
-                      label: provider.category,
+                      labelKey: `book.cat.${provider.category}`,
                       bg: "bg-gray-100",
                       text: "text-gray-600",
                       emoji: "",
@@ -152,7 +152,7 @@ function BookPage() {
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}
                           >
-                            {cfg.label}
+                            {cfg.labelKey ? t(cfg.labelKey, L) : provider.category}
                           </span>
                           <span className="text-xs text-gray-400">
                              {provider.location}
@@ -186,7 +186,7 @@ function BookPage() {
 
                         {/* View button hint */}
                         <div className="mt-4 flex items-center gap-1 text-sm font-medium text-[var(--pawls-terracotta-500)] opacity-0 transition-opacity group-hover:opacity-100">
-                          View services →
+                          {t("book.viewServices", L)}
                         </div>
                       </a>
                       );

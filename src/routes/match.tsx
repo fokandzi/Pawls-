@@ -1,7 +1,7 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, Outlet, useRouterState, useSearch } from "@tanstack/react-router";
 import { seoHead, SEO } from "../lib/seo";
-import { t, normalizeLang, type Lang } from "../lib/i18n";
+import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 import { useEffect, useMemo, useState } from "react";
 
@@ -18,7 +18,7 @@ const sizeLabel: Record<string, { fr: string; en: string }> = {
 };
 
 export const Route = createFileRoute("/match")({
-  head: () => seoHead(SEO.match),
+  head: () => seoHead({ title: t("match.title", DEFAULT_LANG), description: t("match.seoDesc", DEFAULT_LANG) }),
   component: MatchPage,
 });
 
@@ -108,7 +108,8 @@ function SwipeUI() {
       <section className="flex flex-1 items-center justify-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-20">
         <div className="max-w-sm text-center">
           <LangToggle lang={lang} />
-          <span className="mt-4 inline-block text-5xl">🐾</span>
+          <span className="mt-4 inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-3 py-1 text-xs font-semibold text-[var(--pawls-ink-700)]">{t("match.betaPrivate", L)}</span>
+          <span className="mt-4 block text-5xl">🐾</span>
           <h2 className="mt-4 text-2xl font-bold text-gray-900">{t("match.noCandidatesTitle", L)}</h2>
           <p className="mt-2 text-gray-600">{t("match.noCandidatesBody", L)}</p>
           <div className="mt-6 flex flex-col items-center gap-3">
@@ -124,6 +125,7 @@ function SwipeUI() {
 
   return (
     <section className="relative flex flex-1 flex-col items-center bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-8">
+      <span className="mb-3 inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-3 py-1 text-xs font-semibold text-[var(--pawls-ink-700)]">{t("match.betaPrivate", L)}</span>
       <div className="mb-3 flex w-full max-w-sm items-center justify-between">
         <LangToggle lang={lang} />
         <span className="text-sm text-gray-400">{t("match.swipedCount", L).replace("{n}", "—")}</span>

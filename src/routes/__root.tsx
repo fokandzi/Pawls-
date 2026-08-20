@@ -7,8 +7,26 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "~/styles/app.css?url";
+import { createServerFn } from "@tanstack/react-start";
+import { getSessionUser } from "../lib/auth/session";
+import { normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
+
+/** Resolve the ACTUAL language for the SSR <html lang> — from the signed-in
+ * user's preferred_language (users.preferred_language) when available, else
+ * the FR default. Runs server-side so the served HTML carries the right lang. */
+const resolveRootLang = createServerFn({ method: "GET" }).handler(async (ctx: any) => {
+  const request = ctx?.request as Request | undefined;
+  if (!request) return DEFAULT_LANG;
+  try {
+    const user = await getSessionUser(request);
+    return normalizeLang(user?.preferredLanguage ?? null);
+  } catch {
+    return DEFAULT_LANG;
+  }
+});
 
 export const Route = createRootRoute({
+  loader: () => resolveRootLang(),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -47,16 +65,17 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const lang = Route.useLoaderData() as Lang;
   return (
-    <RootDocument>
+    <RootDocument lang={lang}>
       <Outlet />
     </RootDocument>
   );
 }
 
-function RootDocument({ children }: { children: ReactNode }) {
+function RootDocument({ children, lang }: { children: ReactNode; lang: Lang }) {
   return (
-    <html lang="en">
+    <html lang={lang}>
       <head>
         <HeadContent />
       </head>
