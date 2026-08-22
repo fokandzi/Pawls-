@@ -1,11 +1,16 @@
 import posthog from "posthog-js";
 
-const apiKey = (import.meta.env.VITE_POSTHOG_API_KEY || import.meta.env.POSTHOG_API_KEY || "").trim();
+// Safe read of Vite-injected env. In the serverless render bundle (bun build,
+// node target) `import.meta.env` is undefined — guard it so importing this
+// module can never throw at load time (an import-time throw would crash the
+// whole render function for every route). Tracking stays OFF until a real key.
+const env = (globalThis as Record<string, unknown> & { import?: unknown }).import?.meta?.env ?? {};
+const apiKey = ((env.VITE_POSTHOG_API_KEY as string) || (env.POSTHOG_API_KEY as string) || "").trim();
 let initialized = false;
 
 if (typeof window !== "undefined" && apiKey && apiKey !== "phc_placeholder_replace_me") {
   posthog.init(apiKey, {
-    api_host: import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
+    api_host: (env.VITE_POSTHOG_HOST as string) || "https://us.i.posthog.com",
     cookieless_mode: "always",
     persistence: "memory",
     capture_pageview: false,

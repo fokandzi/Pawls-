@@ -6,7 +6,10 @@ let initialized = false;
 /** Configure RevenueCat once. The public SDK key is safe to ship in the app bundle. */
 export async function initIAP(): Promise<void> {
   if (!isNative() || initialized) return;
-  const apiKey = import.meta.env.VITE_REVENUECAT_API_KEY || "";
+  const apiKey =
+    ((globalThis as Record<string, unknown> & { import?: unknown }).import?.meta?.env as
+      | Record<string, string>
+      | undefined)?.VITE_REVENUECAT_API_KEY || "";
   if (!apiKey) throw new Error("RevenueCat API key is not configured");
   await Purchases.configure({ apiKey });
   initialized = true;
