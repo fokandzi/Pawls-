@@ -2,6 +2,7 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { trackEvent } from "../lib/analytics";
 
 export const Route = createFileRoute("/register")({
   head: () =>
@@ -15,6 +16,16 @@ export const Route = createFileRoute("/register")({
 
 function RegisterPage() {
   const L: Lang = DEFAULT_LANG;
+  const search = (Route.useSearch() as any) ?? {};
+  const attrToken = typeof search?.c === "string" ? search.c.slice(0, 400) : "";
+  const campaign = typeof search?.camp === "string" ? search.camp.slice(0, 96) : "";
+
+  const onSignupSubmit = () => {
+    // Consent-gated acquisition analytics (OFF until a real phc_ key exists).
+    trackEvent("signup_started", {
+      campaign: campaign || undefined,
+    });
+  };
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -36,8 +47,16 @@ function RegisterPage() {
           <form
             action="/register"
             method="POST"
+            onSubmit={onSignupSubmit}
             className="mt-10 space-y-5 rounded-2xl border border-[var(--pawls-cream-200)] bg-white p-6 shadow-lg sm:p-8"
           >
+            {/* Attribution carry-through: opaque HMAC-signed token minted at
+                /join. The server verifies it and persists the campaign; an
+                invalid/forged value is silently dropped (metadata only, no
+                entitlement). */}
+            {attrToken ? (
+              <input type="hidden" name="attr_token" value={attrToken} />
+            ) : null}
             <div>
               <label
                 htmlFor="name"

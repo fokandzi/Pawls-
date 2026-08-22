@@ -22,3 +22,33 @@ export function trackEvent(name: string, properties?: AnalyticsProperties): void
 export function identifyUser(email: string): void {
   if (initialized && email.trim()) posthog.identify(email.trim().toLowerCase());
 }
+
+/**
+ * Server-side event capture (used by pre-SSR handlers like registration / dog
+ * creation). Shares the SAME consent gate as the client: it stays completely
+ * OFF until a real `phc_` key exists anywhere in the environment — the
+ * placeholder is treated as absent, and no event is ever dispatched with it.
+ * Fires no network call otherwise.
+ */
+export async function trackServerEvent(
+  name: string,
+  properties?: AnalyticsProperties,
+): Promise<void> {
+  const key = (process.env.POSTHOG_API_KEY || process.env.VITE_POSTHOG_API_KEY || "").trim();
+  if (!key || key === "phc_placeholder_replace_me") return;
+  const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
+  try {
+    await fetch(`${host}/capture/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: key,
+        event: name,
+        timestamp: new Date().toISOString(),
+        properties: { distinct_id: properties?.distinct_id || "pawls-server", ...properties },
+      }),
+    }).catch(() => undefined);
+  } catch (err) {
+    console.error(`[analytics] server capture failed (${name})`, err);
+  }
+}

@@ -16,6 +16,7 @@ import { assertSameOrigin } from "./lib/auth/csrf";
 import { sendMail, verificationEmail, passwordResetEmail, emailDeliveryMode } from "./lib/auth/mailer";
 import { requireUser } from "./lib/auth/authz";
 import { deleteUserAccount } from "./lib/auth/deletion";
+import { verifyAttributionToken } from "./lib/attribution";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NO_STORE = "no-store, max-age=0, must-revalidate";
@@ -77,13 +78,14 @@ export async function handleAuthPost(request: Request): Promise<Response> {
 export async function handleRegisterPost(request: Request): Promise<Response> {
   const csrf = assertSameOrigin(request);
   if (!csrf.ok) return htmlPage("Request blocked", `<p>${escapeHtml(csrf.error)}</p>`, 403);
-  let name = "", email = "", password = "", dob = "";
+  let name = "", email = "", password = "", dob = "", attrToken = "";
   try {
     const form = await request.formData();
     name = formValue(form, "name").slice(0, 120);
     email = formValue(form, "email").toLowerCase().slice(0, 320);
     password = String(form.get("password") ?? "");
     dob = formValue(form, "date_of_birth").slice(0, 10);
+    attrToken = String(form.get("attr_token") ?? "").slice(0, 400);
   } catch {
     return htmlPage("Could not read the sign-up form", "<p>Please go back and try again.</p>", 400);
   }
@@ -114,6 +116,23 @@ export async function handleRegisterPost(request: Request): Promise<Response> {
     ` as any;
     if (!row) return htmlPage("Something went wrong", "<p>We couldn't create your account. Please try again.</p>", 500);
     const userId = Number((row as { id: number }).id);
+    // Persist attribution (campaign + source) keyed to the real user. The
+    // token is HMAC-signed; forged/malformed values fail verification and are
+    // dropped silently. Attribution grants no entitlement — metadata only.
+    if (attrToken) {
+      const info = verifyAttributionToken(attrToken);
+      if (info) {
+        try {
+          await sql()`
+            INSERT INTO acquisition_signups (user_id, campaign, source)
+            VALUES (${userId}, ${info.campaign}, ${info.source ?? null})
+            ON CONFLICT (user_id) DO NOTHING
+          `;
+        } catch (err) {
+          console.error("[auth] attribution write failed (non-fatal)", err);
+        }
+      }
+    }
     const token = randomBytes(32).toString("base64url");
     await sql()`INSERT INTO email_tokens (user_id, kind, token_hash, expires_at)
                 VALUES (${userId}, 'verify', ${sha256Hex(token)}, NOW() + interval '24 hours')`;

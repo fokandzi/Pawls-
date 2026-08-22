@@ -20,6 +20,7 @@
 import { sql } from "./src/db";
 import { getSessionUser } from "./src/lib/auth/session";
 import { assertSameOrigin } from "./src/lib/auth/csrf";
+import { trackServerEvent } from "./src/lib/analytics";
 
 const REQUIRED_FIELDS = [
   "ownerName",
@@ -209,6 +210,29 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
       RETURNING id
     `;
     profileId = Number((row as { id: number }).id);
+    // Pass-through acquisition funnel completion: a dog profile is only created
+    // for a fully registered + verified user, so this is the point where signup
+    // genuinely completes. Emit consent-gated events carrying the campaign. All
+    // of this is non-fatal and stays OFF until a real consumption key exists.
+    try {
+      const attr = await sql()`
+        SELECT campaign, source FROM acquisition_signups WHERE user_id = ${sessionUser.id} LIMIT 1
+      ` as any;
+      if (attr && attr[0]) {
+        const campaign = String(attr[0].campaign ?? "");
+        const source = attr[0].source ? String(attr[0].source) : undefined;
+        const props = {
+          campaign,
+          source,
+          distinct_id: String(sessionUser.id),
+          dog_id: profileId,
+        };
+        await trackServerEvent("signup_complete", props);
+        await trackServerEvent("dog_created", props);
+      }
+    } catch (err) {
+      console.error("[dog-profile] attribution event failed (non-fatal)", err);
+    }
   } catch (err) {
     // Known limitation: Neon queries can fail during SSR on serverless functions.
     // Never crash the request — log it and return a graceful 500 page.

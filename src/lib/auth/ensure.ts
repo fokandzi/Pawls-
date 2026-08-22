@@ -81,6 +81,14 @@ export async function ensureAuthTables(): Promise<void> {
     details JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
+  await sql()`CREATE TABLE IF NOT EXISTS acquisition_signups (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    campaign TEXT NOT NULL,
+    source TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`;
+  await sql()`CREATE UNIQUE INDEX IF NOT EXISTS idx_acquisition_signups_user ON acquisition_signups(user_id)`;
   await sql()`CREATE TABLE IF NOT EXISTS mail_log (
     id SERIAL PRIMARY KEY,
     "to" TEXT NOT NULL,
