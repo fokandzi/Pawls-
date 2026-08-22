@@ -135,6 +135,10 @@ export const fr: Record<string, string> = {
   "home.sub": "{name} réunit le matching, l'élevage, l'adoption, les services et la communauté — pour passer moins de temps à jongler entre les applis et plus de temps avec votre chien. Inscrivez-vous gratuitement et créez dès aujourd'hui le profil de votre chien.",
   "home.ctaCreate": "Créer le profil de votre chien",
   "home.ctaExplore": "Découvrir les fonctionnalités",
+  "home.providerHeading": "Vous êtes un prestataire pour chiens ?",
+  "home.providerBody": "Promeneurs, toiletteurs, gardiens, éducateurs ou vétérinaires : Pawls sélectionne ses prestataires fondateurs à Paris. La réservation en ligne arrive bientôt — inscrivez votre activité dès maintenant.",
+  "home.providerCta": "Inscrire mon activité",
+  "home.providerFine": "Inscription gratuite · La réservation en ligne arrive bientôt à Paris",
   "home.featuresHeading": "Tout ce dont votre chien a besoin, au même endroit",
   "home.featuresSub": "Fini les allers-retours entre les applis. Pawls est la plateforme unique pour chaque aspect de la vie de votre chien — certains services sont déjà en ligne, d'autres sont en préparation.",
   "home.feat.match.title": "Match",
@@ -182,6 +186,8 @@ export const fr: Record<string, string> = {
   "footer.tagline": "La plateforme tout-en-un pour les amoureux des chiens.",
   "footer.privacy": "Confidentialité",
   "footer.terms": "Conditions",
+  "footer.safety": "Sécurité",
+  "footer.guidelines": "Règles de la communauté",
   "footer.settings": "Paramètres",
 
   // Auth pages — register / login / verify-email / forgot-password / reset-password

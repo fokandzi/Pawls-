@@ -135,6 +135,10 @@ export const en: Record<string, string> = {
   "home.sub": "{name} brings together matching, breeding, rescue, booking, and community — so you spend less time juggling apps and more time with your dog. Sign up free and create your dog's profile today.",
   "home.ctaCreate": "Create your dog's profile",
   "home.ctaExplore": "Explore features",
+  "home.providerHeading": "Are you a dog service provider?",
+  "home.providerBody": "Walkers, groomers, sitters, trainers or vets: Pawls is recruiting its founding providers in Paris. Online booking is coming soon — register your business now.",
+  "home.providerCta": "Register my business",
+  "home.providerFine": "Free registration · Online booking coming soon to Paris",
   "home.featuresHeading": "Everything your dog needs, all in one place",
   "home.featuresSub": "Stop switching between apps. Pawls is the single platform for every part of your dog's life — some parts are live now, others are in the works.",
   "home.feat.match.title": "Match",
@@ -182,6 +186,8 @@ export const en: Record<string, string> = {
   "footer.tagline": "The all-in-one platform for dog people.",
   "footer.privacy": "Privacy",
   "footer.terms": "Terms",
+  "footer.safety": "Safety",
+  "footer.guidelines": "Community Guidelines",
   "footer.settings": "Settings",
 
   // Auth pages — register / login / verify-email / forgot-password / reset-password

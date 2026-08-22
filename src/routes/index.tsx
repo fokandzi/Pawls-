@@ -189,6 +189,27 @@ function Home() {
         </div>
       </section>
 
+      {/* Provider secondary CTA — honest: recruitment open, booking pre-launch */}
+      <section className="border-y border-[var(--pawls-cream-100)] bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 py-16">
+        <div className="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+              {t("home.providerHeading", L)}
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-gray-600">
+              {t("home.providerBody", L)}
+            </p>
+            <p className="mt-2 text-xs text-gray-400">{t("home.providerFine", L)}</p>
+          </div>
+          <Link
+            to="/book/register"
+            className="inline-flex shrink-0 items-center justify-center rounded-full border-2 border-[var(--pawls-terracotta-500)] bg-white px-7 py-3 text-sm font-semibold text-[var(--pawls-terracotta-500)] shadow-sm transition-all hover:bg-[var(--pawls-terracotta-500)] hover:text-white sm:px-8 sm:py-3.5 sm:text-base"
+          >
+            {t("home.providerCta", L)}
+          </Link>
+        </div>
+      </section>
+
       {/* Waitlist Section — native form POST, works without client JS */}
       <section
         id="waitlist"
@@ -246,8 +267,14 @@ function Home() {
           <div className="flex items-center gap-2">
             <img src="/logo-full.png" alt="Pawls" className="h-8" />
           </div>
-          <p className="text-sm text-gray-500">
+          <p className="text-center text-sm text-gray-500 sm:text-right">
             {t("home.footerTagline", L)}
+            <span className="mx-1 inline-flex flex-wrap items-center justify-center gap-x-1">
+              <Link to="/privacy" className="underline hover:text-[var(--pawls-terracotta-500)]">{t("footer.privacy", L)}</Link> ·{" "}
+              <Link to="/terms" className="underline hover:text-[var(--pawls-terracotta-500)]">{t("footer.terms", L)}</Link> ·{" "}
+              <Link to="/safety" className="underline hover:text-[var(--pawls-terracotta-500)]">{t("footer.safety", L)}</Link> ·{" "}
+              <Link to="/community-guidelines" className="underline hover:text-[var(--pawls-terracotta-500)]">{t("footer.guidelines", L)}</Link>
+            </span>
           </p>
         </div>
       </footer>
