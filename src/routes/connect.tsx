@@ -10,10 +10,10 @@ import { t, DEFAULT_LANG } from "../lib/i18n";
 // renders NO fictional group/event names or cards. (Fixture group/event data
 // from earlier builds is not rendered and is not seeded into production.)
 
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/connect")({
-  head: () => seoHead(SEO.connect),
+  head: () => seoHead({ title: t("connect.title", DEFAULT_LANG), description: t("connect.desc", DEFAULT_LANG), path: "/connect" }),
   loader: async () => ({}),
   component: ConnectPage,
 });

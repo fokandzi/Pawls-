@@ -264,10 +264,11 @@ const getBreeders = createServerFn({ method: "GET" }).handler(async () => {
 
 // ── Route definition ──────────────────────────────────────────────────────
 
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG } from "../lib/i18n";
 
 export const Route = createFileRoute("/breed")({
-  head: () => seoHead(SEO.breed),
+  head: () => seoHead({ title: t("breed.title", DEFAULT_LANG), description: t("breed.desc", DEFAULT_LANG), path: "/breed" }),
   loader: () => getBreeders(),
   component: BreedPage,
 });
@@ -306,7 +307,7 @@ function verificationBadge(status: string, isDemo: boolean) {
   // "Demo listing", regardless of its verification_status column. Only real
   // (non-demo) rows may show a status badge ("Verified" / "⏳ Pending").
   if (isDemo) {
-    return { label: " Demo listing", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
+    return { label: t("breed.demoBadge", DEFAULT_LANG), bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
   }
   if (status === "verified" || status === "featured") {
     return { label: " Verified", bg: "bg-emerald-100", text: "text-emerald-700" };
@@ -320,6 +321,7 @@ function BreedPage() {
   const { breeders, error } = Route.useLoaderData();
   const routerState = useRouterState();
   const isExactBreed = routerState.location.pathname === "/breed";
+  const lang = DEFAULT_LANG;
 
   // Extract unique breeds for filter pills
   const allBreeds = breeders
@@ -336,12 +338,10 @@ function BreedPage() {
           {/* Hero */}
           <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Find Breeders, Responsibly
+              {t("breed.heroTitle", lang)}
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-              Browse breeder profiles and learn what ethical, health-tested
-              breeding looks like. Demo listings — breeder verification coming
-              soon.
+              {t("breed.heroSub", lang)}
             </p>
           </section>
 
@@ -349,35 +349,35 @@ function BreedPage() {
           <section className="bg-white px-6 pb-12">
             <div className="mx-auto max-w-6xl">
               <h2 className="mb-6 text-center text-2xl font-bold text-gray-900">
-                 Breed Guide: Finding an Ethical Breeder
+                {t("breed.guideTitle", lang)}
               </h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 p-5">
                   <div className="mb-2 text-2xl"></div>
-                  <h3 className="mb-1 font-semibold text-gray-900">Health Testing</h3>
+                  <h3 className="mb-1 font-semibold text-gray-900">{t("breed.guide1Title", lang)}</h3>
                   <p className="text-sm leading-relaxed text-gray-600">
-                    Ethical breeders screen for breed-specific conditions — hips, eyes, heart, and DNA. Always ask to see the certificates (OFA, PennHIP, CERF).
+                    {t("breed.guide1Body", lang)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 p-5">
                   <div className="mb-2 text-2xl"></div>
-                  <h3 className="mb-1 font-semibold text-gray-900">Visit in Person</h3>
+                  <h3 className="mb-1 font-semibold text-gray-900">{t("breed.guide2Title", lang)}</h3>
                   <p className="text-sm leading-relaxed text-gray-600">
-                    A good breeder welcomes visits. You should see where the puppies are raised, meet the mother, and observe the environment.
+                    {t("breed.guide2Body", lang)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 p-5">
                   <div className="mb-2 text-2xl"></div>
-                  <h3 className="mb-1 font-semibold text-gray-900">Ask for Pedigree</h3>
+                  <h3 className="mb-1 font-semibold text-gray-900">{t("breed.guide3Title", lang)}</h3>
                   <p className="text-sm leading-relaxed text-gray-600">
-                    Reputable breeders provide full pedigree documentation. They're proud of their lines and transparent about lineage and health history.
+                    {t("breed.guide3Body", lang)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 p-5">
                   <div className="mb-2 text-2xl"></div>
-                  <h3 className="mb-1 font-semibold text-gray-900">Lifetime Support</h3>
+                  <h3 className="mb-1 font-semibold text-gray-900">{t("breed.guide4Title", lang)}</h3>
                   <p className="text-sm leading-relaxed text-gray-600">
-                    Ethical breeders offer a take-back guarantee and lifetime support. They care about every puppy they produce, forever.
+                    {t("breed.guide4Body", lang)}
                   </p>
                 </div>
               </div>
@@ -391,7 +391,7 @@ function BreedPage() {
                 to="/breed/register"
                 className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--pawls-terracotta-500)] bg-white px-6 py-3 text-sm font-semibold text-[var(--pawls-terracotta-500)] shadow-sm transition-all hover:bg-[var(--pawls-terracotta-500)] hover:text-white"
               >
-                 Join as Breeder — Free
+                {t("breed.joinTitle", lang)}
               </Link>
             </div>
           </section>
@@ -401,8 +401,8 @@ function BreedPage() {
             <div className="mx-auto max-w-6xl">
               {error || !breeders || breeders.length === 0 ? (
                 <EmptyState
-                  title="No breeders available yet"
-                  description="Check back soon for ethical, health-tested breeders near you."
+                  title={t("breed.emptyTitle", lang)}
+                  description={t("breed.emptyBody", lang)}
                 />
               ) : (
                 <>
@@ -483,17 +483,17 @@ function BreedPage() {
 
                           {/* Experience */}
                           <p className="mb-3 text-xs text-gray-400">
-                            {breeder.years_experience} years experience
+                            {t("breed.yearsExperience", lang).replace("{count}", String(breeder.years_experience))}
                           </p>
 
                           {/* Description excerpt */}
                           <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-gray-600">
-                            {breeder.description}
+                            {t(breeder.description, lang)}
                           </p>
 
                           {/* View link */}
                           <div className="mt-4 flex items-center gap-1 text-sm font-medium text-[var(--pawls-terracotta-500)] opacity-0 transition-opacity group-hover:opacity-100">
-                            View breeder →
+                            {t("breed.view", lang)}
                           </div>
                         </Link>
                       );

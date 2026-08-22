@@ -412,10 +412,11 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
 
 // ── Route definition ─────────────────────────────────────────────────────────
 
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG } from "../lib/i18n";
 
 export const Route = createFileRoute("/rescue")({
-  head: () => seoHead(SEO.rescue),
+  head: () => seoHead({ title: t("rescue.title", DEFAULT_LANG), description: t("rescue.desc", DEFAULT_LANG), path: "/rescue" }),
   loader: () => getRescueDogs(),
   component: RescuePage,
 });
@@ -476,6 +477,7 @@ function RescuePage() {
   const { dogs, error } = Route.useLoaderData();
   const routerState = useRouterState();
   const isExactRescue = routerState.location.pathname === "/rescue";
+  const lang = DEFAULT_LANG;
 
   // Filter state
   const [sizeFilter, setSizeFilter] = useState<string | null>(null);
@@ -503,15 +505,13 @@ function RescuePage() {
           {/* Hero */}
           <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Find Your Forever Friend 🐾
+              {t("rescue.heroTitle", lang)}
             </h1>
             <p className="mx-auto mt-3 max-w-lg text-base text-gray-600">
-              Rescue dog profiles from shelters and rescues across the Paris
-              region will appear here. Every dog deserves a loving home.
+              {t("rescue.heroSub", lang)}
             </p>
             <p className="mx-auto mt-3 max-w-lg rounded-xl bg-[var(--pawls-cream-100)] px-4 py-2 text-sm text-[var(--pawls-ink-700)]">
-              Adoptions are coming soon — we're onboarding real shelter
-              partnerships. No adoptions can be started yet.
+              {t("rescue.heroBadge", lang)}
             </p>
           </section>
 
@@ -519,8 +519,8 @@ function RescuePage() {
             <section className="bg-white px-6 pb-20">
               <div className="mx-auto max-w-6xl">
                 <EmptyState
-                  title="Adoptions coming soon"
-                  description="We're onboarding real shelters and rescues in your area. Dogs will appear here as soon as a shelter joins Pawls."
+                  title={t("rescue.emptyTitle", lang)}
+                  description={t("rescue.emptyBody", lang)}
                 />
               </div>
             </section>

@@ -233,10 +233,10 @@ const getVenues = createServerFn({ method: "POST" }).handler(async () => {
 
 // ── Route ────────────────────────────────────────────────────────────────────
 
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/venues")({
-  head: () => seoHead(SEO.venues),
+  head: () => seoHead({ title: t("venues.title", DEFAULT_LANG), description: t("venues.desc", DEFAULT_LANG), path: "/venues" }),
   validateSearch: (search: Record<string, unknown>) => ({
     // Undefined (not null) for absent filters: TanStack serialises null into the
     // URL (?type=null&city=null), which pollutes links and reloads. "null" is
