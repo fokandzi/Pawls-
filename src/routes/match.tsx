@@ -3,7 +3,8 @@ import { createFileRoute, Link, Outlet, useRouterState, useSearch } from "@tanst
 import { seoHead, SEO } from "../lib/seo";
 import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
-import { useEffect, useMemo, useState } from "react";
+import { likeDeckResult } from "../lib/match-ui";
+import { useEffect, useState } from "react";
 
 type DiscoveryDog = {
   id: number; dog_name: string; breed: string; age: number | null;
@@ -42,6 +43,7 @@ function SwipeUI() {
   const [status, setStatus] = useState<"loading" | "loggedOut" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [matchBanner, setMatchBanner] = useState(justMatched);
+  const [matchedDogName, setMatchedDogName] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +135,9 @@ function SwipeUI() {
       {matchBanner && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
           <p className="font-bold text-emerald-700">{t("match.itIsAMatch", L)}</p>
-          <p className="text-sm text-emerald-600">{t("match.itIsAMatchBody", L).replace("{name}", current.dog_name)}</p>
+          {matchedDogName && (
+            <p className="text-sm text-emerald-600">{t("match.itIsAMatchBody", L).replace("{name}", matchedDogName)}</p>
+          )}
         </div>
       )}
       <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-lg">
@@ -165,7 +169,17 @@ function SwipeUI() {
       </div>
       <div className="mt-8 flex items-center gap-8">
         <SwipeButton dogId={current.id} direction="pass" label={t("match.pass", L)} emoji="✕" style="border-red-300 text-red-400" lang={lang} onDone={() => setDogs((d) => d.slice(1))} />
-        <SwipeButton dogId={current.id} direction="like" label={t("match.like", L)} emoji="♥" style="border-emerald-300 text-emerald-400" lang={lang} onDone={(matchCreated) => { setDogs((d) => d.slice(1)); if (matchCreated) setMatchBanner(true); }} />
+        <SwipeButton dogId={current.id} direction="like" label={t("match.like", L)} emoji="♥" style="border-emerald-300 text-emerald-400" lang={lang} onDone={(matchCreated) => {
+          // Success-banner identity comes from the dog being swiped, captured
+          // BEFORE the deck advances (src/lib/match-ui.ts) — never from the
+          // advanced deck head. Ordinary likes (no match) show no banner.
+          const r = likeDeckResult(current, matchCreated, dogs);
+          setDogs(r.nextDogs);
+          if (r.showBanner) {
+            setMatchedDogName(r.matchedDogName);
+            setMatchBanner(true);
+          }
+        }} />
       </div>
       <Link to="/match/matches" className="mt-4 text-sm text-gray-400">{t("match.viewMatches", L)} →</Link>
     </section>
