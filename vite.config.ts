@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import fs from "fs";
 import path from "path";
+import { devApiPlugin } from "./dev-api-plugin.ts";
 
 export default defineConfig({
   server: {
@@ -41,6 +42,7 @@ export default defineConfig({
     }),
     tanstackStart(),
     viteReact(),
+    devApiPlugin(),
     // Inject build timestamp into service worker for auto-updates
     {
       name: "sw-version",
