@@ -163,22 +163,21 @@ function ProviderDetailPage() {
       });
       if (result.success) {
         setBookingResult(result.booking);
-        // Create Stripe checkout session for payment
+        // Create Stripe checkout session for payment. Security #5: the server
+        // derives price/currency/product from the booking row — the client only
+        // sends the opaque booking id.
         setCheckoutLoading(true);
         try {
           const checkoutResult = await createCheckoutSession({
             data: {
               bookingId: result.booking.id,
-              serviceName: result.booking.service_name,
-              priceCents: bookingService.price_cents,
-              providerName: result.booking.provider_name,
             },
           });
           if ("url" in checkoutResult && checkoutResult.url) {
             window.location.href = checkoutResult.url;
             return;
           }
-          // Payments not configured — stay on confirmation card
+          // Payments not configured / checkout rejected — stay on confirmation card
           setCheckoutLoading(false);
         } catch {
           // Stripe unavailable — stay on confirmation card
@@ -323,7 +322,7 @@ function ProviderDetailPage() {
             ) : bookingResult ? (
               <div className="text-center">
                 <div className="mb-3 text-5xl"></div>
-                <h3 className="text-xl font-bold text-gray-900">Booking confirmed!</h3>
+                <h3 className="text-xl font-bold text-gray-900">Booking saved — payment pending</h3>
                 <div className="mt-4 space-y-2 rounded-xl bg-[var(--pawls-cream-50)] p-4 text-left text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Provider</span><span className="font-semibold text-gray-900">{bookingResult.provider_name}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">Service</span><span className="font-semibold text-gray-900">{bookingResult.service_name}</span></div>

@@ -5,8 +5,12 @@ import { sql } from "../db";
  * Creates the booking marketplace tables (IF NOT EXISTS).
  * Safe to call multiple times — won't overwrite existing tables.
  */
-export const createBookingTables = createServerFn({ method: "POST" }).handler(
-  async () => {
+/**
+ * Plain (non-server-fn) DDL for the booking marketplace tables — used by the
+ * server function below AND by core booking/checkout logic so it can run in
+ * tests without the Start AsyncLocalStorage context.
+ */
+export async function ensureBookingTablesSql(): Promise<{ success: true }> {
     await sql()`
       CREATE TABLE IF NOT EXISTS providers (
         id SERIAL PRIMARY KEY,
@@ -41,13 +45,36 @@ export const createBookingTables = createServerFn({ method: "POST" }).handler(
         customer_email TEXT NOT NULL,
         booking_date DATE NOT NULL,
         start_time TIME NOT NULL,
-        status TEXT NOT NULL DEFAULT 'confirmed',
-        created_at TIMESTAMPTZ DEFAULT NOW()
+        status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment','paid','completed','cancelled','refunded','failed')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        customer_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        price_cents INTEGER,
+        currency TEXT NOT NULL DEFAULT 'EUR',
+        payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid','pending','paid','refunded','failed')),
+        cancellation_status TEXT DEFAULT 'none' CHECK (cancellation_status IN ('none','requested','cancelled_by_customer','cancelled_by_provider')),
+        stripe_session_id TEXT,
+        paid_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
 
+    // Safety net: bring older bookings tables up to the canonical migration 006
+    // shape (additive, idempotent — the migration file remains the source of truth).
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_cents INTEGER`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'EUR'`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid','pending','paid','refunded','failed'))`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancellation_status TEXT DEFAULT 'none' CHECK (cancellation_status IN ('none','requested','cancelled_by_customer','cancelled_by_provider'))`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_session_id TEXT`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
+
     return { success: true };
-  },
+}
+
+/** Creates the booking marketplace tables (IF NOT EXISTS). */
+export const createBookingTables = createServerFn({ method: "POST" }).handler(
+  async () => ensureBookingTablesSql(),
 );
 
 /**

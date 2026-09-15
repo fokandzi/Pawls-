@@ -148,6 +148,7 @@ async function handleBookingPayment(session: any) {
     UPDATE bookings
     SET
       status = 'paid',
+      payment_status = 'paid',
       paid_at = NOW(),
       stripe_session_id = ${stripeSessionId}
     WHERE id = ${Number(bookingId)}

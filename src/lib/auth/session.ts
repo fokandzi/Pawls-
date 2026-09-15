@@ -10,18 +10,29 @@
  * - Session lookup is ALWAYS cookie → DB. Never from body/query params.
  * - Logout revokes (sets revoked_at). Deletion revokes all of a user's sessions.
  */
-import { randomBytes, createHash } from "node:crypto";
 import { sql } from "../../db";
+
+/**
+ * node:crypto must be loaded lazily: session.ts is also (transitively) part of
+ * the client bundle graph via server functions, and a top-level node:crypto
+ * import would break the browser build. These helpers are only ever CALLED
+ * server-side; the client bundle never executes them.
+ */
+let nodeCrypto: typeof import("node:crypto") | null = null;
+function cryptoNode(): typeof import("node:crypto") {
+  if (!nodeCrypto) nodeCrypto = require("node:crypto") as typeof import("node:crypto");
+  return nodeCrypto;
+}
 
 export const SESSION_COOKIE = "pawls_session";
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+  return cryptoNode().createHash("sha256").update(input).digest("hex");
 }
 
 export function newSessionToken(): string {
-  return randomBytes(32).toString("base64url");
+  return cryptoNode().randomBytes(32).toString("base64url");
 }
 
 /** Parse the cookie header for a given name. */
