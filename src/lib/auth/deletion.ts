@@ -61,10 +61,33 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
           SELECT conversation_id FROM conversation_participants WHERE user_id = ${user.id}
         )`);
       }
-      if (hasSubscriptions) q.push(tx`DELETE FROM subscriptions WHERE lower(email) = lower(${user.email})`);
+      // Security Finding #13: entitlement lives on the IMMUTABLE subscriptions.user_id
+      // (Findings #8/#9); email is informational only and nullable. Deleting by email
+      // could orphan the deleted user's row or — worse — delete a DIFFERENT user's
+      // subscription on a shared/legacy email, violating the deletion boundary.
+      // Resolve by user_id; keep the lower(email) match ONLY for legacy rows that
+      // never carried a user binding (identical to the dog_profiles pattern above).
+      if (hasSubscriptions) {
+        q.push(tx`DELETE FROM subscriptions
+                  WHERE user_id = ${user.id}
+                     OR (user_id IS NULL AND lower(email) = lower(${user.email}))`);
+      }
+      // referrals: the schema has no user_id column (legacy table is keyed by
+      // referrer_code / referred_email, both email-shaped). We keep the email-based
+      // row removal (the only identity this table exposes) AND also remove rows whose
+      // referred_profile_id is one of the deleted user's dogs, so no referral dangles
+      // on a removed profile (existing column — nothing invented).
       if (hasReferrals) {
-        q.push(tx`DELETE FROM referrals
-                  WHERE lower(referrer_code) = lower(${user.email}) OR lower(referred_email) = lower(${user.email})`);
+        if (dogIds.length > 0) {
+          q.push(tx`DELETE FROM referrals
+                    WHERE lower(referrer_code) = lower(${user.email})
+                       OR lower(referred_email) = lower(${user.email})
+                       OR referred_profile_id = ANY(${dogIds})`);
+        } else {
+          q.push(tx`DELETE FROM referrals
+                    WHERE lower(referrer_code) = lower(${user.email})
+                       OR lower(referred_email) = lower(${user.email})`);
+        }
       }
       q.push(tx`DELETE FROM sessions WHERE user_id = ${user.id}`);
       q.push(tx`DELETE FROM users WHERE id = ${user.id}`);
