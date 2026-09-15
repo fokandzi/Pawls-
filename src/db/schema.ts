@@ -113,6 +113,12 @@ export const createMatchTables = createServerFn({ method: "POST" }).handler(
     // P0-A: demo flag — only seed-marked profiles may appear in public demo feeds
     // (e.g. /viral). Real/test/staff profiles must never leak into public discovery.
     await sql()`ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT false`;
+    // Security Finding #8: immutable owner linkage (users.id). Legacy demo/test
+    // rows keep user_id NULL; Plus entitlement resolves via this column, never
+    // via dog_profiles.email = subscriptions.email. Migration 001 also adds it;
+    // this runtime ALTER keeps fresh/other DBs consistent (additive, idempotent).
+    await sql()`ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)`;
+    await sql()`CREATE INDEX IF NOT EXISTS idx_dog_profiles_user_id ON dog_profiles(user_id)`;
 
     await sql()`
       CREATE TABLE IF NOT EXISTS swipes (
@@ -224,12 +230,27 @@ export const deleteAccount = createServerFn({ method: "POST" })
     };
   });
 
+/**
+ * Security Finding #8 — Plus entitlement resolves via the dog's IMMUTABLE owner
+ * (dog_profiles.user_id -> subscriptions.user_id), never via email. Plain
+ * (non-server-fn) so tests can call it without the Start context.
+ */
+export async function isDogProfilePlus(profileId: number): Promise<boolean> {
+  const [profile] = await sql()`SELECT user_id FROM dog_profiles WHERE id = ${profileId}`;
+  if (!profile?.user_id) return false; // legacy/unlinked profile -> not Plus
+  const plus = await sql()`
+    SELECT id FROM subscriptions
+    WHERE user_id = ${Number(profile.user_id)} AND status IN ('active','trialing')
+    LIMIT 1
+  `;
+  return plus.length > 0;
+}
+
 export const checkSwipeAllowance = createServerFn({ method: "POST" })
   .validator((data: unknown) => ({ profileId: Number((data as any)?.profileId) }))
   .handler(async ({ data }) => {
     await createMatchTables();
-    const [profile] = await sql()`SELECT email FROM dog_profiles WHERE id = ${data.profileId}`;
-    if (profile?.email) { const plus = await sql()`SELECT id FROM subscriptions WHERE lower(email)=lower(${profile.email}) AND status IN ('active','trialing')`; if (plus.length) return { allowed: true, count: 0, isPlus: true }; }
+    if (await isDogProfilePlus(data.profileId)) return { allowed: true, count: 0, isPlus: true };
     const rows = await sql()`SELECT COUNT(*)::int AS count FROM swipes WHERE swiper_profile_id=${data.profileId} AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`;
     const count = Number((rows[0] as any)?.count ?? 0); return { allowed: count < 3, count, isPlus: false };
   });
@@ -253,21 +274,16 @@ export const checkPlusStatus = createServerFn({ method: "POST" })
     return { email };
   })
   .handler(async ({ data }) => {
-    // Ensure the subscriptions table exists (created by webhook-handler too)
-    await sql()`
-      CREATE TABLE IF NOT EXISTS subscriptions (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        plan TEXT NOT NULL DEFAULT 'pawnder-plus',
-        status TEXT NOT NULL DEFAULT 'active',
-        stripe_session_id TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
+    // Security Finding #8: entitlement is keyed by immutable users.id, never by
+    // joining subscriptions.email directly. The client email is treated only as
+    // a lookup hint into the SERVER-side users table (canonical account email);
+    // if no such account exists, no Plus status is ever reported.
+    await sql()`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER`;
+    const [user] = await sql()`SELECT id FROM users WHERE lower(email) = lower(${data.email}) LIMIT 1`;
+    if (!user) return { hasPlus: false };
     const [row] = await sql()`
       SELECT id FROM subscriptions
-      WHERE email = ${data.email} AND status = 'active'
+      WHERE user_id = ${Number(user.id)} AND status = 'active'
     `;
     return { hasPlus: !!row };
   });
@@ -493,6 +509,40 @@ export const getReferralCount = createServerFn({ method: "GET" })
   });
 
 /**
+ * Security Finding #8 — the Plus-dog trending query joins through IMMUTABLE
+ * identity (dog_profiles.user_id -> subscriptions.user_id), never
+ * dp.email = sub.email. Plain (non-server-fn) so tests can call it directly.
+ * Only seed-marked (is_demo) profiles may appear in public discovery.
+ */
+export async function plusTrendingDogs(): Promise<Record<string, any>[]> {
+  const trending = await sql()`
+    SELECT
+      dp.id,
+      dp.dog_name,
+      dp.breed,
+      dp.photo_url,
+      dp.location,
+      dp.owner_name,
+      dp.instagram,
+      dp.tiktok,
+      dp.twitter,
+      dp.youtube,
+      COUNT(s.id)::int AS swipe_count
+    FROM dog_profiles dp
+    INNER JOIN subscriptions sub ON dp.user_id = sub.user_id
+    LEFT JOIN swipes s ON s.target_profile_id = dp.id
+      AND s.direction = 'right'
+      AND s.created_at >= NOW() - INTERVAL '7 days'
+    WHERE sub.status = 'active'
+      AND dp.is_demo = true
+    GROUP BY dp.id, dp.dog_name, dp.breed, dp.photo_url, dp.location, dp.owner_name, dp.instagram, dp.tiktok, dp.twitter, dp.youtube
+    ORDER BY swipe_count DESC, dp.created_at DESC
+    LIMIT 20
+  `;
+  return trending.map((d: any) => ({ ...d, swipe_count: Number(d.swipe_count) }));
+}
+
+/**
  * Returns the top trending dogs — Plus subscribers' dogs ranked by
  * right-swipe count in the last 7 days. Falls back to newest Plus
  * dogs if no recent swipes exist.
@@ -503,48 +553,9 @@ export const getTrendingDogs = createServerFn({ method: "GET" }).handler(
     // P0 Data: no seeding from public page views - demo dog profiles already
     // exist and are marked is_demo=true. Fixture writes are guarded against
     // production (see assertNotProductionSeeding in dog-seed.ts).
-
-    // Ensure subscriptions table exists
-    await sql()`
-      CREATE TABLE IF NOT EXISTS subscriptions (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        plan TEXT NOT NULL DEFAULT 'pawnder-plus',
-        status TEXT NOT NULL DEFAULT 'active',
-        stripe_session_id TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
-
-    // Count right-swipes per Plus dog in the last 7 days.
-    // Public demo feed: ONLY seed-marked (is_demo) profiles may appear — real
-    // profiles (including test/staff) must never leak into public discovery.
-    const trending = await sql()`
-      SELECT
-        dp.id,
-        dp.dog_name,
-        dp.breed,
-        dp.photo_url,
-        dp.location,
-        dp.owner_name,
-        dp.instagram,
-        dp.tiktok,
-        dp.twitter,
-        dp.youtube,
-        COUNT(s.id)::int AS swipe_count
-      FROM dog_profiles dp
-      INNER JOIN subscriptions sub ON dp.email = sub.email
-      LEFT JOIN swipes s ON s.target_profile_id = dp.id
-        AND s.direction = 'right'
-        AND s.created_at >= NOW() - INTERVAL '7 days'
-      WHERE sub.status = 'active'
-        AND dp.is_demo = true
-      GROUP BY dp.id, dp.dog_name, dp.breed, dp.photo_url, dp.location, dp.owner_name, dp.instagram, dp.tiktok, dp.twitter, dp.youtube
-      ORDER BY swipe_count DESC, dp.created_at DESC
-      LIMIT 20
-    `;
-
+    // Security Finding #8: join on immutable owner identity (dp.user_id =
+    // sub.user_id), never email.
+    const trending = await plusTrendingDogs();
     // If we got results with swipes, return them
     if (trending.length > 0) {
       return trending.map((d: any) => ({

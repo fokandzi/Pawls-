@@ -110,6 +110,34 @@ export function isProdEnv(): boolean {
   return env === "production" || env === "prod";
 }
 
+// ─── Shared helpers re-exported for sibling hardening modules ──────────────────
+// Security Finding #8 reuses the SAME idempotency claim, alert channel, tables
+// and prod detection as Finding #9 (single source of truth — no divergence).
+
+export async function ensureWebhookTablesOnce() {
+  await ensureTablesOnce();
+}
+export async function claimWebhookEvent(eventId: string, eventType: string) {
+  return claimEvent(eventId, eventType);
+}
+export async function completeWebhookEvent(eventId: string) {
+  await completeEvent(eventId);
+}
+export async function releaseWebhookEvent(eventId: string) {
+  await releaseEvent(eventId);
+}
+export async function writeWebhookAlert(opts: {
+  eventId?: string | null;
+  eventType?: string | null;
+  code: string;
+  severity?: "info" | "warning" | "error";
+  message: string;
+  details?: AlertDetails;
+}) {
+  await logAlert(opts);
+}
+export { userIdFromString };
+
 // ─── Schema helpers (additive, idempotent) ────────────────────────────────────
 
 async function ensureWebhookTables() {
@@ -163,6 +191,9 @@ async function ensureWebhookTables() {
   await sql()`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS user_id INTEGER`;
   await sql()`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`;
   await sql()`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`;
+  // Security Finding #8: immutable RevenueCat app_user_id mapping (email alone is
+  // never identity). Additive; legacy rows keep NULL.
+  await sql()`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS revenuecat_app_user_id TEXT`;
   await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`;
   await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER NOT NULL DEFAULT 0`;
   await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER NOT NULL DEFAULT 0`;
@@ -416,10 +447,18 @@ async function handlePaymentFailed(paymentIntent: Record<string, any>): Promise<
 
 function userIdFromString(raw: unknown): number | null {
   const s = String(raw ?? "").trim();
-  const m = /^(?:user[:_]?)?(\d+)$/.exec(s);
+  // Accept the Pawls app_user_id conventions (`pawls_<id>`, `user:<id>`,
+  // `rc_<id>`) and bare numeric ids — NEVER email-like strings.
+  const m = /^(?:(?:user|pawls|rc)[:_]?)?(\d+)$/.exec(s);
   if (!m) return null;
   const id = Number(m[1]);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** Strip a `sha256=` / `sha1=` HMAC prefix (webhook signature headers). */
+export function stripSignaturePrefix(signature: string): string {
+  const m = /^(?:sha256|sha1)=(.*)$/i.exec(signature.trim());
+  return m ? m[1] : signature.trim();
 }
 
 async function resolveEntitlementUserId(
