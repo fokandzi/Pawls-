@@ -90,11 +90,20 @@ for (let attempt = 1; ; attempt++) {
         // Intercept Stripe webhook requests before the SSR handler.
         // TanStack Start SSR renders HTML for all routes including API routes,
         // so we handle webhooks at the Bun server level.
-        if (
-          req.method === "POST" &&
-          (pathname === "/api/webhooks/stripe" || pathname === "/api/stripe-webhook")
-        ) {
+        // Security Finding #9: exactly ONE processing path per runtime.
+        //  - /api/webhooks/stripe  -> the idempotent, reconciled handler (live).
+        //  - /api/stripe-webhook   -> fail-closed 501 stub (retired, never mutates).
+        if (req.method === "POST" && pathname === "/api/webhooks/stripe") {
           return handleStripeWebhook(req);
+        }
+        if (req.method === "POST" && pathname === "/api/stripe-webhook") {
+          return new Response(
+            JSON.stringify({
+              error: "deprecated_endpoint",
+              message: "This webhook endpoint is retired. Deliver Stripe events to /api/webhooks/stripe.",
+            }),
+            { status: 501, headers: { "Content-Type": "application/json" } },
+          );
         }
 
         if (pathname !== "/") {

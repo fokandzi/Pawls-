@@ -53,7 +53,10 @@ export async function ensureBookingTablesSql(): Promise<{ success: true }> {
         payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid','pending','paid','refunded','failed')),
         cancellation_status TEXT DEFAULT 'none' CHECK (cancellation_status IN ('none','requested','cancelled_by_customer','cancelled_by_provider')),
         stripe_session_id TEXT,
+        stripe_payment_intent_id TEXT,
         paid_at TIMESTAMPTZ,
+        platform_fee_cents INTEGER NOT NULL DEFAULT 0,
+        platform_fee_bps INTEGER NOT NULL DEFAULT 0,
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
@@ -66,7 +69,10 @@ export async function ensureBookingTablesSql(): Promise<{ success: true }> {
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid','pending','paid','refunded','failed'))`;
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancellation_status TEXT DEFAULT 'none' CHECK (cancellation_status IN ('none','requested','cancelled_by_customer','cancelled_by_provider'))`;
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_session_id TEXT`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`;
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER NOT NULL DEFAULT 0`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER NOT NULL DEFAULT 0`;
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
     return { success: true };
