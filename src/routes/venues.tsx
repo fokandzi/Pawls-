@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
 import { createVenuesTable } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -184,13 +184,20 @@ const seedVenues = [
 
 // ── Type config ──────────────────────────────────────────────────────────────
 
-const typeConfig: Record<string, { label: string; emoji: string; bg: string; text: string; border: string }> = {
-  cafe: { label: "Café", emoji: "", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]", border: "border-amber-300" },
-  park: { label: "Park", emoji: "", bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-300" },
-  beach: { label: "Beach", emoji: "", bg: "bg-sky-100", text: "text-sky-700", border: "border-sky-300" },
-  trail: { label: "Trail", emoji: "", bg: "bg-green-100", text: "text-green-700", border: "border-green-300" },
-  bar: { label: "Bar", emoji: "", bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-300" },
+const typeConfig: Record<string, { labelKey: string; emoji: string; bg: string; text: string; border: string }> = {
+  cafe: { labelKey: "venues.type.cafe", emoji: "", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]", border: "border-amber-300" },
+  park: { labelKey: "venues.type.park", emoji: "", bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-300" },
+  beach: { labelKey: "venues.type.beach", emoji: "", bg: "bg-sky-100", text: "text-sky-700", border: "border-sky-300" },
+  trail: { labelKey: "venues.type.trail", emoji: "", bg: "bg-green-100", text: "text-green-700", border: "border-green-300" },
+  bar: { labelKey: "venues.type.bar", emoji: "", bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-300" },
 };
+
+/** Localized venue-type label (e.g. "Parc" for type=park in FR). */
+function typeLabel(type: string, lang: Lang): string {
+  const cfg = typeConfig[type];
+  if (cfg) return t(cfg.labelKey, lang);
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
 
 const featureEmoji: Record<string, string> = {
   "off-leash area": "",
@@ -321,7 +328,7 @@ function VenuesPage() {
           <section className="bg-white px-6 pb-8">
             <div className="mx-auto max-w-6xl">
               <div id="venue-map" className="h-[400px] w-full rounded-2xl border border-[var(--pawls-cream-200)] shadow-md" style={{ zIndex: 0 }} />
-              <p className="mt-2 text-xs text-gray-400">Map tiles © OpenStreetMap contributors</p>
+              <p className="mt-2 text-xs text-gray-400">{t("venues.mapAttribution", lang)}</p>
               <script
                 dangerouslySetInnerHTML={{
                   __html: `(function(){
@@ -329,10 +336,10 @@ function VenuesPage() {
   if(!el || typeof L==='undefined') return;
   var map=L.map(el).setView([48.8566,2.3522],12);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'\u00a9 OpenStreetMap'}).addTo(map);
-  var venues=${JSON.stringify(filteredVenues.map(v=>({name:v.name,lat:Number(v.lat),lng:Number(v.lng),type:v.type,city:v.city,address:v.address})))};
+  var venues=${JSON.stringify(filteredVenues.map(v=>({name:v.name,lat:Number(v.lat),lng:Number(v.lng),type:typeLabel(v.type,lang),city:v.city,address:v.address})))};
   venues.forEach(function(v){
     var lat=parseFloat(v.lat), lng=parseFloat(v.lng);
-    if(!isNaN(lat)&&!isNaN(lng)) L.marker([lat,lng]).addTo(map).bindPopup('<strong>'+v.name+'</strong><br>'+v.type.charAt(0).toUpperCase()+v.type.slice(1)+' \u00b7 '+v.city);
+    if(!isNaN(lat)&&!isNaN(lng)) L.marker([lat,lng]).addTo(map).bindPopup('<strong>'+v.name+'</strong><br>'+v.type+' \u00b7 '+v.city);
   });
   setTimeout(function(){ map.invalidateSize(); },100);
 })();`,
@@ -347,7 +354,7 @@ function VenuesPage() {
               <div className="flex flex-wrap items-center gap-4">
                 {/* Type filter — plain links so filtering works without JS */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Type</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{t("venues.filterType", lang)}</span>
                   <div className="flex flex-wrap gap-2">
                     <a
                       href="/venues"
@@ -357,10 +364,10 @@ function VenuesPage() {
                           : "bg-[var(--pawls-cream-50)] text-gray-600 hover:bg-[var(--pawls-cream-100)]"
                       }`}
                     >
-                      All
+                      {t("venues.filterAll", lang)}
                     </a>
                     {types.map((t) => {
-                      const cfg = typeConfig[t] ?? { label: t, emoji: "" };
+                      const cfg = typeConfig[t] ?? { labelKey: "", emoji: "" };
                       return (
                         <a
                           key={t}
@@ -371,7 +378,7 @@ function VenuesPage() {
                               : "bg-[var(--pawls-cream-50)] text-gray-600 hover:bg-[var(--pawls-cream-100)]"
                           }`}
                         >
-                          {cfg.emoji} {cfg.label}
+                          {cfg.emoji} {cfg.labelKey ? t(cfg.labelKey, lang) : typeLabel(t, lang)}
                         </a>
                       );
                     })}
@@ -380,7 +387,7 @@ function VenuesPage() {
 
                 {/* City filter — plain links */}
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">City</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{t("venues.filterCity", lang)}</span>
                   <div className="flex flex-wrap gap-2">
                     {cities.map((c) => (
                       <a
@@ -404,12 +411,12 @@ function VenuesPage() {
                     href="/venues"
                     className="text-sm font-medium text-[var(--pawls-terracotta-500)] hover:text-[var(--pawls-terracotta-700)] underline underline-offset-2"
                   >
-                    Clear filters
+                    {t("venues.clearFilters", lang)}
                   </a>
                 )}
               </div>
               <p className="mt-3 text-sm text-gray-400">
-                Showing {filteredVenues.length} of {allVenues.length} venues
+                {t("venues.showingCount", lang).replace("{shown}", String(filteredVenues.length)).replace("{total}", String(allVenues.length))}
               </p>
             </div>
           </section>
@@ -420,14 +427,14 @@ function VenuesPage() {
               {filteredVenues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 px-6 py-16 text-center">
                   <span className="text-5xl"></span>
-                  <h3 className="mt-4 text-xl font-bold text-gray-900">No venues match your filters</h3>
-                  <p className="mt-2 text-gray-600">Try adjusting your filters to see more results.</p>
+                  <h3 className="mt-4 text-xl font-bold text-gray-900">{t("venues.noMatchTitle", lang)}</h3>
+                  <p className="mt-2 text-gray-600">{t("venues.noMatchBody", lang)}</p>
                 </div>
               ) : (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredVenues.map((venue) => {
                     const cfg = typeConfig[venue.type] ?? {
-                      label: venue.type,
+                      labelKey: "",
                       emoji: "",
                       bg: "bg-gray-100",
                       text: "text-gray-600",
@@ -466,7 +473,7 @@ function VenuesPage() {
                             <span
                               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text} ${cfg.border}`}
                             >
-                              {cfg.emoji} {cfg.label}
+                              {cfg.emoji} {cfg.labelKey ? t(cfg.labelKey, lang) : typeLabel(venue.type, lang)}
                             </span>
                             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--pawls-cream-50)] px-2 py-0.5 text-xs font-medium text-[var(--pawls-gold-500)]">
                                {venue.city}
@@ -491,7 +498,7 @@ function VenuesPage() {
                                   key={f}
                                   className="inline-flex items-center gap-1 rounded-full bg-[var(--pawls-cream-50)] px-2 py-0.5 text-xs font-medium text-[var(--pawls-gold-500)]"
                                 >
-                                  {featureEmoji[f] ?? ""} {f}
+                                  {featureEmoji[f] ?? ""} {t(f, lang)}
                                 </span>
                               ))}
                             </div>
@@ -499,7 +506,7 @@ function VenuesPage() {
 
                           {/* Click hint */}
                           <div className="mt-3 flex items-center gap-1 text-xs font-medium text-[var(--pawls-terracotta-500)] opacity-0 transition-opacity group-hover:opacity-100">
-                            Click to view on map →
+                            {t("venues.clickHint", lang)}
                           </div>
                         </div>
                       </a>

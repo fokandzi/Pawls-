@@ -265,7 +265,7 @@ const getBreeders = createServerFn({ method: "GET" }).handler(async () => {
 // ── Route definition ──────────────────────────────────────────────────────
 
 import { seoHead } from "../lib/seo";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 export const Route = createFileRoute("/breed")({
   head: () => seoHead({ title: t("breed.title", DEFAULT_LANG), description: t("breed.desc", DEFAULT_LANG), path: "/breed" }),
@@ -291,28 +291,28 @@ function breederEmoji(breedSpecialty: string): string {
   return "";
 }
 
-function membershipBadge(tier: string) {
+function membershipBadge(tier: string, lang: Lang) {
   if (tier === "premium") {
-    return { label: "⭐ Premium", bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-300" };
+    return { label: t("breed.premium", lang), bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-300" };
   }
   if (tier === "plus") {
-    return { label: " Plus", bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-300" };
+    return { label: t("breed.plus", lang), bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-300" };
   }
   return null;
 }
 
-function verificationBadge(status: string, isDemo: boolean) {
+function verificationBadge(status: string, isDemo: boolean, lang: Lang) {
   // Honest display (owner directive 2026-08-14): demo fixture breeders must
   // NEVER look like genuine pending applicants — a demo row ALWAYS shows
   // "Demo listing", regardless of its verification_status column. Only real
   // (non-demo) rows may show a status badge ("Verified" / "⏳ Pending").
   if (isDemo) {
-    return { label: t("breed.demoBadge", DEFAULT_LANG), bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
+    return { label: t("breed.demoBadge", lang), bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
   }
   if (status === "verified" || status === "featured") {
-    return { label: " Verified", bg: "bg-emerald-100", text: "text-emerald-700" };
+    return { label: t("breed.verified", lang), bg: "bg-emerald-100", text: "text-emerald-700" };
   }
-  return { label: "⏳ Pending", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
+  return { label: t("breed.pending", lang), bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -424,8 +424,8 @@ function BreedPage() {
                     {breeders.map((breeder) => {
                       // P0 Data: membership tier badges are fabricated for
                       // fixture rows — only show them for real breeders.
-                      const mb = breeder.is_demo ? null : membershipBadge(breeder.membership_tier);
-                      const vb = verificationBadge(breeder.verification_status, breeder.is_demo);
+                      const mb = breeder.is_demo ? null : membershipBadge(breeder.membership_tier, lang);
+                      const vb = verificationBadge(breeder.verification_status, breeder.is_demo, lang);
                       const emoji = breederEmoji(breeder.breed_specialty);
 
                       return (

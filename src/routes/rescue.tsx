@@ -413,7 +413,7 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
 // ── Route definition ─────────────────────────────────────────────────────────
 
 import { seoHead } from "../lib/seo";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 export const Route = createFileRoute("/rescue")({
   head: () => seoHead({ title: t("rescue.title", DEFAULT_LANG), description: t("rescue.desc", DEFAULT_LANG), path: "/rescue" }),
@@ -429,11 +429,10 @@ const sizeEmoji: Record<string, string> = {
   large: "",
 };
 
-const sizeLabel: Record<string, string> = {
-  small: "Small",
-  medium: "Medium",
-  large: "Large",
-};
+/** Localized size label via dict (rescue.size.small/medium/large). */
+function sizeLabel(size: string, lang: Lang): string {
+  return t(`rescue.size.${size}`, lang);
+}
 
 const sizeBadge: Record<string, { bg: string; text: string }> = {
   small: { bg: "bg-sky-100", text: "text-sky-700" },
@@ -465,10 +464,16 @@ function dogEmoji(breed: string): string {
   return "";
 }
 
-function ageLabel(age: number): string {
-  if (age < 1) return "Puppy";
-  if (age === 1) return "1 year";
-  return `${age} years`;
+function ageLabel(age: number, lang: Lang): string {
+  if (age < 1) return t("rescue.age.puppy", lang);
+  if (age === 1) return t("rescue.age.year", lang);
+  return t("rescue.age.years", lang).replace("{count}", String(age));
+}
+
+function genderLabel(gender: string, lang: Lang): string {
+  if (gender === "male") return t("rescue.gender.male", lang);
+  if (gender === "female") return t("rescue.gender.female", lang);
+  return gender.charAt(0).toUpperCase() + gender.slice(1);
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -532,7 +537,7 @@ function RescuePage() {
                   <div className="flex flex-wrap gap-6">
                     {/* Size filter */}
                     <div className="flex flex-col gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Size</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{t("rescue.filterSize", lang)}</span>
                       <div className="flex gap-2">
                         {(["small", "medium", "large"] as const).map((s) => (
                           <button
@@ -544,7 +549,7 @@ function RescuePage() {
                                 : "bg-[var(--pawls-cream-50)] text-gray-600 hover:bg-[var(--pawls-cream-100)]"
                             }`}
                           >
-                            {sizeEmoji[s]} {sizeLabel[s]}
+                            {sizeEmoji[s]} {sizeLabel(s, lang)}
                           </button>
                         ))}
                       </div>
@@ -552,7 +557,7 @@ function RescuePage() {
 
                     {/* Compatibility toggle chips */}
                     <div className="flex flex-col gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Good with</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{t("rescue.filterGoodWith", lang)}</span>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setDogsFilter(dogsFilter === null ? true : dogsFilter === true ? false : null)}
@@ -564,7 +569,7 @@ function RescuePage() {
                                 : "bg-gray-50 text-gray-500 hover:bg-gray-100"
                           }`}
                         >
-                           Dogs
+                          {t("rescue.goodDogs", lang)}
                         </button>
                         <button
                           onClick={() => setKidsFilter(kidsFilter === null ? true : kidsFilter === true ? false : null)}
@@ -576,7 +581,7 @@ function RescuePage() {
                                 : "bg-gray-50 text-gray-500 hover:bg-gray-100"
                           }`}
                         >
-                           Kids
+                          {t("rescue.goodKids", lang)}
                         </button>
                         <button
                           onClick={() => setCatsFilter(catsFilter === null ? true : catsFilter === true ? false : null)}
@@ -588,7 +593,7 @@ function RescuePage() {
                                 : "bg-gray-50 text-gray-500 hover:bg-gray-100"
                           }`}
                         >
-                           Cats
+                          {t("rescue.goodCats", lang)}
                         </button>
                       </div>
                     </div>
@@ -605,7 +610,7 @@ function RescuePage() {
                           }}
                           className="text-sm font-medium text-[var(--pawls-terracotta-500)] hover:text-[var(--pawls-terracotta-700)] underline underline-offset-2"
                         >
-                          Clear all filters
+                          {t("rescue.clearFilters", lang)}
                         </button>
                       </div>
                     )}
@@ -613,7 +618,7 @@ function RescuePage() {
 
                   {/* Result count */}
                   <p className="mt-4 text-sm text-gray-400">
-                    Showing {filteredDogs?.length ?? 0} of {dogs.length} dogs
+                    {t("rescue.showingCount", lang).replace("{shown}", String(filteredDogs?.length ?? 0)).replace("{total}", String(dogs.length))}
                   </p>
                 </div>
               </section>
@@ -637,7 +642,7 @@ function RescuePage() {
                             {dog.urgent && (
                               <div className="absolute right-3 top-3 z-10">
                                 <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow-md">
-                                   URGENT
+                                  {t("rescue.urgent", lang)}
                                 </span>
                               </div>
                             )}
@@ -645,7 +650,7 @@ function RescuePage() {
                             {/* Demo listing badge */}
                             <div className="absolute left-3 top-3 z-10">
                               <span className="inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-2.5 py-1 text-xs font-semibold text-[var(--pawls-gold-500)] shadow-sm">
-                                Demo
+                                {t("rescue.demoBadge", lang)}
                               </span>
                             </div>
 
@@ -675,7 +680,7 @@ function RescuePage() {
                                   <p className="text-sm text-gray-500">{dog.breed}</p>
                                 </div>
                                 <span className="text-lg font-bold text-[var(--pawls-terracotta-500)]">
-                                  {ageLabel(dog.age)}
+                                  {ageLabel(dog.age, lang)}
                                 </span>
                               </div>
 
@@ -684,11 +689,11 @@ function RescuePage() {
                                 <span
                                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${szCfg.bg} ${szCfg.text}`}
                                 >
-                                  {sizeEmoji[dog.size]} {sizeLabel[dog.size] ?? dog.size}
+                                  {sizeEmoji[dog.size]} {sizeLabel(dog.size, lang)}
                                 </span>
                                 <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
                                   {dog.gender === "male" ? "" : ""}{" "}
-                                  {dog.gender.charAt(0).toUpperCase() + dog.gender.slice(1)}
+                                  {genderLabel(dog.gender, lang)}
                                 </span>
                               </div>
 
@@ -705,17 +710,17 @@ function RescuePage() {
                                 <span
                                   className={dog.good_with_dogs ? "" : "text-gray-300 line-through"}
                                 >
-                                   dogs
+                                  {t("rescue.goodDogs", lang)}
                                 </span>
                                 <span
                                   className={dog.good_with_kids ? "" : "text-gray-300 line-through"}
                                 >
-                                   kids
+                                  {t("rescue.goodKids", lang)}
                                 </span>
                                 <span
                                   className={dog.good_with_cats ? "" : "text-gray-300 line-through"}
                                 >
-                                   cats
+                                  {t("rescue.goodCats", lang)}
                                 </span>
                               </div>
                             </div>
@@ -727,8 +732,8 @@ function RescuePage() {
                     /* No results with filters */
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 px-6 py-16 text-center">
                       <span className="text-5xl"></span>
-                      <h3 className="mt-4 text-xl font-bold text-gray-900">No dogs match your filters</h3>
-                      <p className="mt-2 text-gray-600">Try adjusting your filters to see more results.</p>
+                      <h3 className="mt-4 text-xl font-bold text-gray-900">{t("rescue.noMatchTitle", lang)}</h3>
+                      <p className="mt-2 text-gray-600">{t("rescue.noMatchBody", lang)}</p>
                       <button
                         onClick={() => {
                           setSizeFilter(null);
@@ -738,7 +743,7 @@ function RescuePage() {
                         }}
                         className="mt-4 text-sm font-medium text-[var(--pawls-terracotta-500)] hover:text-[var(--pawls-terracotta-700)] underline underline-offset-2"
                       >
-                        Clear all filters
+                        {t("rescue.clearFilters", lang)}
                       </button>
                     </div>
                   )}
