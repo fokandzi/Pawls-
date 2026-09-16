@@ -548,4 +548,15 @@ export const fr: Record<string, string> = {
   "breed.pending": "⏳ En attente",
   "breed.premium": "⭐ Premium",
   "breed.plus": " Plus",
+
+  // /home — page de bienvenue dans l'appli (FR-first, jamais localisée avant)
+  "welcome.seoTitle": "Bienvenue sur Pawls — Votre espace",
+  "welcome.seoDesc": "Bienvenue sur Pawls. Choisissez un outil pour commencer : Match, élevage responsable, services et adoption.",
+  "welcome.heading": "Bienvenue sur Pawls",
+  "welcome.sub": "La plateforme tout-en-un pour les chiens et leurs humains. Choisissez un outil ci-dessus pour commencer.",
+  "welcome.betaNote": "Match est en bêta privée à Paris. L'élevage, les services et l'adoption arrivent bientôt.",
+  "welcome.card.match.desc": "Compagnons de jeu",
+  "welcome.card.breed.desc": "Éleveurs éthiques",
+  "welcome.card.book.desc": "Services à proximité",
+  "welcome.card.rescue.desc": "Adopter un chien",
 };

@@ -520,4 +520,15 @@ export const en: Record<string, string> = {
   "breed.pending": "⏳ Pending",
   "breed.premium": "⭐ Premium",
   "breed.plus": " Plus",
+
+  // /home — in-app welcome page (FR-first page, EN mirror)
+  "welcome.seoTitle": "Welcome to Pawls — Your space",
+  "welcome.seoDesc": "Welcome to Pawls. Choose a tool to get started: Match, responsible breeding, services and adoption.",
+  "welcome.heading": "Welcome to Pawls",
+  "welcome.sub": "The all-in-one platform for dog people. Choose a tool above to get started.",
+  "welcome.betaNote": "Match is in private beta in Paris. Breeding, services and rescue are coming soon.",
+  "welcome.card.match.desc": "Find playmates",
+  "welcome.card.breed.desc": "Ethical breeders",
+  "welcome.card.book.desc": "Services nearby",
+  "welcome.card.rescue.desc": "Adopt a dog",
 };

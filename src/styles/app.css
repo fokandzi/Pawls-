@@ -10,16 +10,32 @@
     color: var(--pawls-ink-900);
     font-family: var(--font-body);
     @apply antialiased;
+    /* `overflow-x: hidden` on html/body makes them scroll containers, which
+       silently BREAKS `position: sticky` for the app toolbar: the header
+       scrolled off with the page instead of staying pinned (owner-reported
+       "the toolbar is not visible" on mobile AND web). `overflow-x: clip`
+       clips horizontal overflow without creating a scroll container, so the
+       sticky header keeps working. The `hidden` line stays as a fallback for
+       engines without `clip`; `clip` wins where supported. */
     overflow-x: hidden;
+    overflow-x: clip;
     -webkit-overflow-scrolling: touch;
   }
   button, a, input, select, textarea { font-family: var(--font-body); }
-}
 
-/* Prevent images and other content from breaking out */
-img, video, iframe {
-  max-width: 100%;
-  height: auto;
+  /* Prevent images and other content from breaking out.
+     KEEP THIS INSIDE @layer base: as an UNLAYERED rule it beat every Tailwind
+     height/max-width utility on images (the /home welcome logo declaring
+     `h-16` rendered at 343px on mobile; the footer logo declaring `h-8`
+     rendered at 618px on desktop) — which is exactly the owner's "the welcome
+     page zooms out the logo" complaint. Tailwind preflight already declares
+     this for img/video inside @layer base; repeating it here (same layer, for
+     iframe too) keeps the safety net while letting `h-*`/`max-w-*` utilities
+     win as authored. */
+  img, video, iframe {
+    max-width: 100%;
+    height: auto;
+  }
 }
 
 /* Prevent horizontal overflow from any element */
