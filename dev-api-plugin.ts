@@ -67,6 +67,7 @@ export function devApiPlugin(): Plugin {
               web = await handleRegisterPost(toWebRequest(req));
             } else if (
               (req.method === "POST" && pathname.startsWith("/auth/")) ||
+              (req.method === "POST" && pathname === "/api/auth/resend-verification") ||
               (req.method === "GET" && pathname === "/auth/me")
             ) {
               web = await handleAuthPost(toWebRequest(req));

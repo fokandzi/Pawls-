@@ -97,6 +97,11 @@ export async function ensureAuthTables(): Promise<void> {
     mode TEXT NOT NULL DEFAULT 'test',
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
+  // Delivery accounting (migration 007): every outbound attempt gets an honest
+  // status — 'test' (never sent), 'sent' (provider accepted), 'failed' (+error).
+  await sql()`ALTER TABLE mail_log ADD COLUMN IF NOT EXISTS status TEXT`;
+  await sql()`ALTER TABLE mail_log ADD COLUMN IF NOT EXISTS error TEXT`;
+  await sql()`ALTER TABLE mail_log ADD COLUMN IF NOT EXISTS provider_id TEXT`;
   ensured = true;
 }
 

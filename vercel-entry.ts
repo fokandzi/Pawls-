@@ -53,6 +53,7 @@ export default async function vercelHandler(
     // Native auth endpoints (POST /auth/*, GET /auth/me) — handled pre-SSR.
     if (
       (request.method === "POST" && new URL(request.url).pathname.startsWith("/auth/")) ||
+      (request.method === "POST" && new URL(request.url).pathname === "/api/auth/resend-verification") ||
       (request.method === "GET" && new URL(request.url).pathname === "/auth/me")
     ) {
       const authRes = await handleAuthPost(request);

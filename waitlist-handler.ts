@@ -7,13 +7,28 @@
 // The site's client-side JS hydration is broken site-wide, so every interactive
 // flow must work through native HTML form POSTs — this handler is what the
 // landing-page waitlist form submits to (action="/api/waitlist" method="POST").
-// It validates the email, inserts it into the Neon `waitlist` table
-// (idempotent), and 302-redirects to /?subscribed=1 where the landing page
-// renders an honest "You're on the list" confirmation. On any DB failure it
-// still redirects so the visitor's sign-up never crashes the request.
+// It validates the email and inserts it into the Neon `waitlist` table
+// (idempotent), then redirects back to the landing page with a status the
+// landing page renders honestly:
+//
+//   /?subscribed=1          the row really is in the table (success)
+//   /?waitlist=invalid      the submitted email was not a valid address
+//   /?waitlist=error        the insert FAILED — never shown as success
+//
+// Previously ANY DB error still redirected to /?subscribed=1, i.e. the visitor
+// was told they had joined the list when nothing was stored. That false success
+// is what the 2026-09-28 launch audit flagged; the handler now reports what
+// actually happened.
 import { sql } from "./src/db";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function redirect(location: string): Response {
+  return new Response(null, {
+    status: 302,
+    headers: { Location: location, "Cache-Control": "no-store, max-age=0, must-revalidate" },
+  });
+}
 
 export async function handleWaitlistPost(request: Request): Promise<Response> {
   let email = "";
@@ -22,23 +37,11 @@ export async function handleWaitlistPost(request: Request): Promise<Response> {
     email = String(form.get("email") ?? "").trim().toLowerCase().slice(0, 320);
   } catch (err) {
     console.error("[waitlist] failed to parse form body", err);
-    return new Response("Could not read the waitlist form. Please try again.", {
-      status: 400,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-store, max-age=0, must-revalidate",
-      },
-    });
+    return redirect("/?waitlist=invalid#waitlist");
   }
 
   if (!EMAIL_RE.test(email)) {
-    return new Response("Please provide a valid email address.", {
-      status: 400,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-store, max-age=0, must-revalidate",
-      },
-    });
+    return redirect("/?waitlist=invalid#waitlist");
   }
 
   try {
@@ -54,17 +57,12 @@ export async function handleWaitlistPost(request: Request): Promise<Response> {
       ON CONFLICT (email) DO NOTHING
     `;
   } catch (err) {
-    // Known limitation: Neon queries can fail during SSR on serverless
-    // functions. Never crash the request — log it and still redirect so the
-    // visitor sees a confirmation.
-    console.error("[waitlist] DB insert failed", err);
+    // Neon queries can fail during SSR on serverless functions. Never crash the
+    // request, but never claim success either: the visitor is sent back to the
+    // form with an honest failure notice.
+    console.error("[waitlist] DB insert failed — reporting failure (no success)", err);
+    return redirect("/?waitlist=error#waitlist");
   }
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: "/?subscribed=1",
-      "Cache-Control": "no-store, max-age=0, must-revalidate",
-    },
-  });
+  return redirect("/?subscribed=1#waitlist");
 }

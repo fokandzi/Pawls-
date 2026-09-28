@@ -62,6 +62,11 @@ for (let attempt = 1; ; attempt++) {
         if (req.method === "POST" && pathname.startsWith("/auth/")) {
           return handleAuthPost(req);
         }
+        // Native POST /api/auth/resend-verification — session-guarded re-send of
+        // the verification email (same pre-SSR pattern).
+        if (req.method === "POST" && pathname === "/api/auth/resend-verification") {
+          return handleAuthPost(req);
+        }
         if (req.method === "GET" && pathname === "/auth/me") {
           return handleAuthPost(req);
         }

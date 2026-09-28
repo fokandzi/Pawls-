@@ -44,7 +44,15 @@ export const Route = createFileRoute("/")({
       ? Object.fromEntries(new URLSearchParams(rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch).entries())
       : (rawSearch ?? {})) as Record<string, unknown>;
     const subscribed = String(search.subscribed ?? "") === "1";
-    return { businessName, subscribed };
+    // ?waitlist=invalid|error — the native handler reports failure honestly and
+    // the form must say so instead of showing the success card.
+    const waitlistStatus = String(search.waitlist ?? "");
+    return {
+      businessName,
+      subscribed,
+      waitlistInvalid: waitlistStatus === "invalid",
+      waitlistError: waitlistStatus === "error",
+    };
   },
   component: Home,
 });
@@ -66,7 +74,7 @@ const features: {
 ];
 
 function Home() {
-  const { businessName, subscribed } = Route.useLoaderData();
+  const { businessName, subscribed, waitlistInvalid, waitlistError } = Route.useLoaderData();
   // Public landing renders FR by default (DEFAULT_LANG='fr'); a persisted
   // FR|EN toggle arrives with the full i18n phase.
   const L: Lang = DEFAULT_LANG;
@@ -234,25 +242,39 @@ function Home() {
               </p>
             </div>
           ) : (
-            <form
-              action="/api/waitlist"
-              method="POST"
-              className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
-            >
-              <input
-                type="email"
-                name="email"
-                required
-                placeholder={t("home.waitlistPlaceholder", L)}
-                className="flex-1 rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3.5 text-gray-900 placeholder:text-gray-400 transition-shadow focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
-              />
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-[var(--pawls-terracotta-500)] px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-[var(--pawls-terracotta-500)]/25 transition-colors duration-200 hover:bg-[var(--pawls-terracotta-700)]"
+            <>
+              {/* The native handler reports failure honestly (?waitlist=invalid|error)
+                  — never an "you're on the list" card when nothing was stored. */}
+              {waitlistError || waitlistInvalid ? (
+                <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-left">
+                  <p className="text-base font-semibold text-amber-900">
+                    {t(waitlistInvalid ? "home.waitlistInvalidTitle" : "home.waitlistErrTitle", L)}
+                  </p>
+                  <p className="mt-1 text-sm text-amber-800">
+                    {t(waitlistInvalid ? "home.waitlistInvalidBody" : "home.waitlistErrBody", L)}
+                  </p>
+                </div>
+              ) : null}
+              <form
+                action="/api/waitlist"
+                method="POST"
+                className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
               >
-                {t("home.waitlistCta", L)}
-              </button>
-            </form>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  placeholder={t("home.waitlistPlaceholder", L)}
+                  className="flex-1 rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3.5 text-gray-900 placeholder:text-gray-400 transition-shadow focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-[var(--pawls-terracotta-500)] px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-[var(--pawls-terracotta-500)]/25 transition-colors duration-200 hover:bg-[var(--pawls-terracotta-700)]"
+                >
+                  {t("home.waitlistCta", L)}
+                </button>
+              </form>
+            </>
           )}
 
           <p className="mt-4 text-xs text-gray-400">

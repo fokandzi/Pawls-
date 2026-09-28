@@ -2,6 +2,7 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../lib/password-policy";
 import { trackEvent } from "../lib/analytics";
 
 export const Route = createFileRoute("/register")({
@@ -119,12 +120,11 @@ function RegisterPage() {
               </label>
               <input
                 id="password"
-                minLength={8}
-                maxLength={128}
+                minLength={PASSWORD_MIN_LENGTH}
+                maxLength={PASSWORD_MAX_LENGTH}
                 name="password"
                 type="password"
                 required
-                minLength={6}
                 autoComplete="new-password"
                 placeholder={t("auth.passwordPlaceholder", L)}
                 className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 placeholder:text-gray-400 transition-shadow focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
