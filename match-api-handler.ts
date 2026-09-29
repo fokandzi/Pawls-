@@ -9,6 +9,8 @@
  *   GET  /api/match/matches     -> { matches: [...] }
  *   POST /api/match/swipe       -> { ok, matchCreated, matchId, duplicate, error? }
  *   POST /api/match/dog/edit    -> { ok, error? }   (JSON or form-encoded)
+ *   POST /api/match/dog/photo   -> multipart upload/replace/remove of the dog
+ *                                  photo (photo_url); 401 unauth, 403 non-owner
  *   POST /api/match/dog/delete  -> { ok, error? }   (JSON or form-encoded)
  *   POST /api/match/lang        -> { ok, error? }   (JSON or form-encoded)
  *
@@ -35,6 +37,7 @@ import {
   sendMessage,
   markConversationRead,
 } from "./src/lib/message-core";
+import { handleDogPhotoRequest } from "./src/lib/dog-photo-route";
 
 const NO_STORE = "no-store, max-age=0, must-revalidate";
 
@@ -149,6 +152,16 @@ export async function handleMatchApi(request: Request): Promise<Response> {
         console.error("[match-api] swipe failed", err);
         return json({ ok: false, error: "DB_UNAVAILABLE", message: "We couldn't record your swipe right now." }, 503);
       }
+    }
+
+    // ── Dog photo (P0 batch B): multipart upload / replace / remove ──────
+    // Real file storage for dog_profiles.photo_url. Same pre-SSR path as the
+    // rest of the Match API; the endpoint does its own CSRF, session and
+    // ownership checks (see src/lib/dog-photo-route.ts). Deliberately NOT
+    // routed through readBody() below — that helper strips File parts, and the
+    // photo IS the payload here.
+    case "/api/match/dog/photo": {
+      return handleDogPhotoRequest(request, sessionUser);
     }
 
     case "/api/match/dog/edit": {

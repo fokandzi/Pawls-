@@ -147,11 +147,12 @@ function CreateProfilePage() {
                 <input
                   type="file"
                   name="photo"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className={`${inputClass} cursor-pointer file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--pawls-terracotta-500)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white file:transition-colors hover:file:bg-[var(--pawls-terracotta-700)]`}
                 />
                 <p className="mt-1.5 text-xs text-gray-500">
-                  Add a photo so your pup stands out in the Match deck. JPG or PNG, up to 4 MB.
+                  Add a photo so your pup stands out in the Match deck. JPG, PNG or WebP, up to 4
+                  MB. If a photo cannot be stored you will be told — it is never silently dropped.
                 </p>
               </div>
 

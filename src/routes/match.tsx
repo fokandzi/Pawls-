@@ -4,6 +4,7 @@ import { seoHead, SEO } from "../lib/seo";
 import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 import { likeDeckResult } from "../lib/match-ui";
+import { DogPhoto } from "../lib/dog-photo-ui";
 import { useEffect, useState } from "react";
 
 type DiscoveryDog = {
@@ -142,8 +143,17 @@ function SwipeUI() {
       )}
       <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-[var(--pawls-cream-100)] bg-white shadow-lg">
         <div className="relative flex h-56 items-center justify-center overflow-hidden bg-gradient-to-br from-[var(--pawls-cream-100)] to-[var(--pawls-cream-50)]">
-          <span className="absolute text-8xl">{sizeEmoji[current.size ?? "medium"] ?? "🐶"}</span>
-          {current.photo_url && <img src={current.photo_url} alt={current.dog_name} className="relative z-10 h-full w-full object-cover" />}
+          {/* Real photo when the owner uploaded one; an honest neutral mark (never
+              an emoji or a stock dog photo) when they have not. */}
+          <DogPhoto
+            src={current.photo_url}
+            alt={current.dog_name}
+            className="relative z-10 h-full w-full object-cover"
+            placeholderClassName="relative z-10 flex flex-col items-center justify-center gap-2 text-[var(--pawls-terracotta-500)]"
+            glyphClassName="h-14 w-14 opacity-50"
+            label={t("photo.none", L)}
+            labelClassName="text-xs font-semibold text-[var(--pawls-ink-700)]"
+          />
         </div>
         <div className="p-5">
           <div className="flex items-start justify-between">

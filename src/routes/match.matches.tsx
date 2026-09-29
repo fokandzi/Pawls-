@@ -5,6 +5,7 @@ import { seoHead, SEO } from "../lib/seo";
 import { t, normalizeLang, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 import { ReportModal, safetyPost } from "../lib/safety-ui";
+import { DogPhoto } from "../lib/dog-photo-ui";
 
 type MatchRow = {
   id: number;
@@ -161,8 +162,13 @@ function MatchesPage() {
             <div className="space-y-4">
               {matches.map((m) => (
                 <div key={m.id} className="flex items-center gap-4 rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-5 shadow-sm">
-                  <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--pawls-cream-50)] text-3xl">
-                    {m.photo_url ? <img src={m.photo_url} alt={m.dog_name} className="h-full w-full object-cover" /> : "🐶"}
+                  <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--pawls-cream-50)]">
+                    <DogPhoto
+                      src={m.photo_url}
+                      alt={m.dog_name}
+                      className="h-full w-full object-cover"
+                      glyphClassName="h-7 w-7 opacity-50"
+                    />
                   </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-bold text-gray-900">

@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { seoHead } from "../lib/seo";
 import { t, normalizeLang, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
+import { DogPhoto } from "../lib/dog-photo-ui";
 
 type MyDog = {
   id: number; dog_name: string; breed: string; size: string | null;
   energy_level: string | null; temperament: string | null; bio: string | null;
+  photo_url: string | null;
   sex: string | null; date_of_birth: string | null; weight_kg: number | null;
   dog_friendly: boolean | null; child_friendly: boolean | null;
   vaccination_status: string | null; neutered_spayed: boolean | null;
@@ -31,6 +33,14 @@ function MyDogsPage() {
   const [error, setError] = useState("");
   const [updated, setUpdated] = useState(search.updated === "1");
   const [deleted, setDeleted] = useState(search.deleted === "1");
+  // Photo notices come from the server redirect (?photo=saved|removed|failed) —
+  // "failed" is the honest outcome when a photo could not be stored, so the
+  // owner is told instead of silently losing their upload.
+  const [photoNotice] = useState<string>(
+    search.photo === "saved" || search.photo === "removed" || search.photo === "failed"
+      ? String(search.photo)
+      : "",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +76,9 @@ function MyDogsPage() {
 
           {updated && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{t("mydogs.updated", L)}</div>}
           {deleted && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{t("mydogs.deleted", L)}</div>}
+          {photoNotice === "saved" && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{t("photo.saved", L)}</div>}
+          {photoNotice === "removed" && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{t("photo.removed", L)}</div>}
+          {photoNotice === "failed" && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">{t("photo.failed", L)}</div>}
 
           {status === "loading" && (
             <div className="flex justify-center py-12">
@@ -112,19 +125,26 @@ function DogCard({ dog, lang }: { dog: MyDog; lang: Lang }) {
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-4 rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-5 shadow-sm">
-        <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--pawls-cream-50)] text-3xl">🐶</div>
-        <div className="flex-1">
-          <h3 className="text-lg font-bold text-gray-900">{dog.dog_name}</h3>
-          <p className="text-sm text-gray-500">{dog.breed}</p>
-          <p className="mt-0.5 text-xs text-gray-400">{dog.profile_visibility === "hidden" ? t("mydogs.visibilityHidden", L) : t("mydogs.visibilityPublic", L)}</p>
+      <div className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-[var(--pawls-cream-50)]">
+            <DogPhoto src={dog.photo_url} alt={dog.dog_name} glyphClassName="h-8 w-8 opacity-50" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold text-gray-900">{dog.dog_name}</h3>
+            <p className="text-sm text-gray-500">{dog.breed}</p>
+            <p className="mt-0.5 text-xs text-gray-400">{dog.profile_visibility === "hidden" ? t("mydogs.visibilityHidden", L) : t("mydogs.visibilityPublic", L)}</p>
+          </div>
+          <button onClick={() => setEditing(true)} className="rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white">{t("mydogs.edit", L)}</button>
         </div>
-        <button onClick={() => setEditing(true)} className="rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white">{t("mydogs.edit", L)}</button>
+        <DogPhotoAdmin dog={dog} lang={L} />
       </div>
     );
   }
 
   return (
+    <>
+    <DogPhotoAdmin dog={dog} lang={L} boxed />
     <form method="POST" action="/api/match/dog/edit" className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-5 shadow-sm">
       <input type="hidden" name="dogId" value={dog.id} />
       <input type="hidden" name="next" value="/match/my-dogs?updated=1" />
@@ -182,7 +202,80 @@ function DogCard({ dog, lang }: { dog: MyDog; lang: Lang }) {
         <DeleteDogForm dogId={dog.id} lang={L} />
       </div>
     </form>
+    </>
   );
+}
+
+/**
+ * Owner-only photo control: replace (upload) or remove the dog's photo.
+ *
+ * Two separate, plain HTML forms POSTing to the authenticated native endpoint
+ * /api/match/dog/photo (multipart). Served only to the owner — but note the
+ * authority is the SERVER: the endpoint re-checks the session and dog ownership
+ * on every request, so hiding or hand-crafting this control changes nothing.
+ * On failure the endpoint answers an honest FR page and photo_url is untouched.
+ */
+function DogPhotoAdmin({ dog, lang, boxed = false }: { dog: MyDog; lang: Lang; boxed?: boolean }) {
+  const L = lang;
+  const fileClass =
+    "block w-full min-w-[11rem] flex-1 text-xs text-gray-500 file:mr-3 file:cursor-pointer file:rounded-full file:border-0 file:bg-[var(--pawls-cream-100)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--pawls-ink-700)]";
+  const body = (
+    <>
+      <div className="flex items-start gap-3">
+        <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[var(--pawls-cream-50)]">
+          <DogPhoto src={dog.photo_url} alt={dog.dog_name} glyphClassName="h-7 w-7 opacity-50" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-gray-600">{t("photo.label", L)}</p>
+          <form
+            method="POST"
+            action="/api/match/dog/photo"
+            encType="multipart/form-data"
+            className="mt-1.5 flex flex-wrap items-center gap-2"
+          >
+            <input type="hidden" name="dogId" value={dog.id} />
+            <input type="hidden" name="action" value="upload" />
+            <input type="hidden" name="next" value="/match/my-dogs?photo=saved" />
+            <input
+              type="file"
+              name="photo"
+              required
+              accept="image/jpeg,image/png,image/webp"
+              aria-label={t("photo.label", L)}
+              className={fileClass}
+            />
+            <button
+              type="submit"
+              className="rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white"
+            >
+              {dog.photo_url ? t("photo.replace", L) : t("photo.add", L)}
+            </button>
+          </form>
+          <p className="mt-1.5 text-xs text-gray-400">{t("photo.hint", L)}</p>
+          {dog.photo_url ? (
+            <form method="POST" action="/api/match/dog/photo" className="mt-1.5">
+              <input type="hidden" name="dogId" value={dog.id} />
+              <input type="hidden" name="action" value="remove" />
+              <input type="hidden" name="next" value="/match/my-dogs?photo=removed" />
+              <button type="submit" className="text-xs font-medium text-gray-400 underline">
+                {t("photo.remove", L)}
+              </button>
+            </form>
+          ) : (
+            <p className="mt-1.5 text-xs text-gray-400">{t("photo.noneHint", L)}</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+  if (boxed) {
+    return (
+      <div className="mb-3 rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-5 shadow-sm">
+        {body}
+      </div>
+    );
+  }
+  return <div className="mt-4 border-t border-[var(--pawls-cream-100)] pt-4">{body}</div>;
 }
 
 function DeleteDogForm({ dogId, lang }: { dogId: number; lang: Lang }) {

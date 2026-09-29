@@ -21,6 +21,8 @@ import { sql } from "./src/db";
 import { getSessionUser } from "./src/lib/auth/session";
 import { assertSameOrigin } from "./src/lib/auth/csrf";
 import { trackServerEvent } from "./src/lib/analytics";
+import { validateDogPhotoFile, uploadDogPhoto } from "./src/lib/dog-photo";
+import { errorPage } from "./src/lib/auth/pages";
 
 const REQUIRED_FIELDS = [
   "ownerName",
@@ -35,9 +37,6 @@ const REQUIRED_FIELDS = [
 
 const SIZES = new Set(["small", "medium", "large"]);
 const ENERGY_LEVELS = new Set(["low", "medium", "high"]);
-
-/** ~4MB cap — stays under Vercel's 4.5MB serverless request-body limit. */
-const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 
 const NO_STORE = "no-store, max-age=0, must-revalidate";
 
@@ -150,33 +149,41 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
     );
   }
 
-  // Optional dog photo: extract the file, validate the size, and upload it to
-  // Uploadthing server-side. Upload failures (missing UPLOADTHING_TOKEN/SECRET,
-  // SDK error, network error) NEVER fail the request — we log and continue with
-  // photo_url = null, and the Match deck already falls back to placedog photos.
+  // Optional dog photo: validated (JPEG/PNG/WebP, ≤ 4 MB, content-sniffed) and
+  // uploaded to real object storage through the shared dog-photo core.
+  //
+  // Honesty rules (P0 batch B):
+  //   - an invalid file is refused with FR copy BEFORE any row is written;
+  //   - if the file is valid but storage is unavailable (no UPLOADTHING_TOKEN,
+  //     SDK error, timeout) the profile is still created WITHOUT a photo and the
+  //     user is sent to /match/my-dogs?photo=failed, where an honest banner says
+  //     the photo was not uploaded and offers the upload control again.
+  //     We never claim the photo was saved, and we never write a dead URL.
   const photo = form.get("photo");
   let photoUrl: string | null = null;
+  let photoFailed = false;
   if (photo instanceof File && photo.size > 0) {
-    if (photo.size > MAX_PHOTO_BYTES) {
-      return textResponse("Photo too large — please choose an image under 4 MB.", 400, "text/plain");
+    const validation = await validateDogPhotoFile(photo);
+    if (!validation.ok) {
+      console.error(`[dog-profile] rejected photo: ${validation.log}`);
+      return errorPage(request, {
+        titleKey: validation.titleKey,
+        bodyKey: validation.bodyKey,
+        status: validation.status,
+        links: [
+          { href: "/match/create", labelKey: "photo.nav.create" },
+          { href: "/", labelKey: "auth.nav.home" },
+        ],
+      });
     }
-    try {
-      const { UTApi } = await import("uploadthing/server");
-      // uploadthing v7 reads UPLOADTHING_TOKEN; also accept the older
-      // UPLOADTHING_SECRET name so the owner's existing key keeps working.
-      const token = process.env.UPLOADTHING_TOKEN ?? process.env.UPLOADTHING_SECRET;
-      const utapi = token ? new UTApi({ token }) : new UTApi();
-      const res = await utapi.uploadFiles(photo);
-      if (res.error) {
-        console.error("[dog-profile] photo upload error (saving profile without photo)", res.error);
-      } else if (res.data?.url) {
-        photoUrl = res.data.url;
-        console.log("[dog-profile] photo uploaded:", photoUrl);
-      } else {
-        console.error("[dog-profile] photo upload returned no URL (saving profile without photo)");
-      }
-    } catch (err) {
-      console.error("[dog-profile] photo upload failed (saving profile without photo)", err);
+    const uploaded = await uploadDogPhoto(validation.file);
+    if (uploaded.ok) {
+      photoUrl = uploaded.url;
+      console.log("[dog-profile] photo uploaded:", photoUrl);
+    } else {
+      // Not silent: the user will be told, and the profile keeps no photo URL.
+      photoFailed = true;
+      console.error(`[dog-profile] photo NOT uploaded (${uploaded.status}): ${uploaded.log}`);
     }
   }
 
@@ -246,6 +253,12 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
 
   return new Response(null, {
     status: 302,
-    headers: { Location: "/match", "Cache-Control": NO_STORE },
+    // Honest landing: if a photo was supplied but could not be stored, the user
+    // lands on the management page with an explicit "photo not uploaded" banner
+    // (and the upload control) instead of a page that implies everything worked.
+    headers: {
+      Location: photoFailed ? "/match/my-dogs?photo=failed" : "/match",
+      "Cache-Control": NO_STORE,
+    },
   });
 }
