@@ -114,7 +114,7 @@ function BookPage() {
             </p>
           </section>
 
-          {/* Join CTA */}
+          {/* Join CTA + customer/provider entry points (batch D1 surfaces) */}
           <section className="bg-white px-6 pb-8">
             <div className="mx-auto max-w-6xl text-center">
               <Link
@@ -123,6 +123,17 @@ function BookPage() {
               >
                  {t("book.listBusiness", L)}
               </Link>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-sm">
+                <Link to="/book/my-bookings" className="rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-2 font-semibold text-gray-700 transition-colors hover:bg-[var(--pawls-cream-50)]">
+                  Mes réservations
+                </Link>
+                <Link to="/book/provider" className="rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-2 font-semibold text-gray-700 transition-colors hover:bg-[var(--pawls-cream-50)]">
+                  Espace prestataire
+                </Link>
+              </div>
+              <p className="mx-auto mt-3 max-w-xl text-xs text-gray-500">
+                Les paiements ne sont pas encore activés : une réservation est enregistrée sans paiement et bloque son créneau.
+              </p>
             </div>
           </section>
 

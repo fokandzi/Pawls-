@@ -54,6 +54,9 @@ let userB: { id: number; token: string };
 let approvedProviderId: number;
 let providerPendingId: number;
 let approvedServiceId: number;
+let providerOwnerId: number;
+let dogAId: number;
+let dogBId: number;
 let servicePriceCents = 3450; // €34.50 — server-authored price
 let serviceCurrency = "eur"; // stored lowercase; checkout must uppercase it
 let serviceName = `SecFind5 Walk ${MARKER}`;
@@ -82,13 +85,45 @@ async function insertUser(role: string): Promise<{ id: number; token: string }> 
   return { id: Number(u.id), token };
 }
 
-async function insertProvider(approvalStatus: string): Promise<number> {
+async function insertProvider(approvalStatus: string, ownerUserId: number | null = null): Promise<number> {
   const [p] = await sql()`
-    INSERT INTO providers (name, category, description, location, approval_status)
-    VALUES (${`${MARKER}_provider_${approvalStatus}`}, 'walker', 'test fixture - security finding 5', 'Paris', ${approvalStatus})
+    INSERT INTO providers (name, category, description, location, approval_status, owner_user_id)
+    VALUES (${`${MARKER}_provider_${approvalStatus}`}, 'walker', 'test fixture - security finding 5', 'Paris', ${approvalStatus}, ${ownerUserId})
     RETURNING id
   `;
   return Number(p.id);
+}
+
+/**
+ * Batch D1: a bookable provider must be approved AND owned by a REAL (non-test)
+ * user, and it must publish availability, and the customer must book one of
+ * their own dogs. These fixtures provide exactly that.
+ */
+async function insertRealOwner(): Promise<number> {
+  const [u] = await sql()`
+    INSERT INTO users (email, name, email_verified_at, is_test, preferred_language)
+    VALUES (${`${MARKER}_provider_owner@example.com`}, 'SecFind5 Real Owner', NOW(), false, 'fr')
+    RETURNING id
+  `;
+  return Number(u.id);
+}
+
+async function insertAvailability(providerId: number): Promise<void> {
+  for (let dow = 0; dow <= 6; dow++) {
+    await sql()`
+      INSERT INTO provider_availability (provider_id, day_of_week, start_time, end_time)
+      VALUES (${providerId}, ${dow}, '09:00'::time, '18:00'::time)
+    `;
+  }
+}
+
+async function insertDog(userId: number, label: string): Promise<number> {
+  const [d] = await sql()`
+    INSERT INTO dog_profiles (owner_name, dog_name, breed, age, size, energy_level, temperament, location, user_id, is_demo)
+    VALUES ('SecFind5', ${`${MARKER}_dog_${label}`}, 'Mixed', 3, 'medium', 'medium', 'friendly', 'Paris', ${userId}, false)
+    RETURNING id
+  `;
+  return Number(d.id);
 }
 
 async function insertService(
@@ -104,6 +139,14 @@ async function insertService(
     RETURNING id
   `;
   return { id: Number(s.id), price_cents: priceCents, currency, name };
+}
+
+// Migration 009 adds a UNIQUE index on (provider_id, booking_date, start_time) for
+// LIVE bookings, so every fixture booking in this suite needs its own slot.
+let slotCursor = 0;
+function nextSlot(): string {
+  const minutes = 9 * 60 + slotCursor++;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -130,7 +173,7 @@ async function insertBooking(
     )
     VALUES (
       ${providerId}, ${serviceId}, 'SecFind5 Customer', ${CUST_EMAIL},
-      ${overrides.bookingDate ?? tomorrowStr()}::date, '09:00'::time,
+      ${overrides.bookingDate ?? tomorrowStr()}::date, ${nextSlot()}::time,
       ${overrides.status ?? "pending_payment"}, ${userId},
       ${overrides.priceCents ?? servicePriceCents}, ${overrides.currency ?? "EUR"},
       ${overrides.paymentStatus ?? "unpaid"}, ${overrides.cancellationStatus ?? "none"}
@@ -161,8 +204,12 @@ beforeAll(async () => {
   await sql()`SELECT 1`; // ensure connectivity up-front
   userA = await insertUser("ownerA");
   userB = await insertUser("ownerB");
-  approvedProviderId = await insertProvider("approved");
-  providerPendingId = await insertProvider("pending");
+  providerOwnerId = await insertRealOwner();
+  approvedProviderId = await insertProvider("approved", providerOwnerId);
+  providerPendingId = await insertProvider("pending", providerOwnerId);
+  await insertAvailability(approvedProviderId);
+  dogAId = await insertDog(userA.id, "a");
+  dogBId = await insertDog(userB.id, "b");
   const svc = await insertService(approvedProviderId);
   approvedServiceId = svc.id;
   servicePriceCents = svc.price_cents;
@@ -174,7 +221,9 @@ afterAll(async () => {
   // Remove ONLY the fixtures this suite created (never touches other data).
   // Each statement is isolated so one failure cannot stop the rest.
   const steps = [
-    () => sql()`DELETE FROM bookings WHERE customer_email = ${CUST_EMAIL}`,
+    () => sql()`DELETE FROM bookings WHERE customer_email LIKE ${`${MARKER}%`} OR customer_email = ${CUST_EMAIL}`,
+    () => sql()`DELETE FROM provider_availability WHERE provider_id IN (SELECT id FROM providers WHERE name LIKE ${`${MARKER}%`})`,
+    () => sql()`DELETE FROM dog_profiles WHERE dog_name LIKE ${`${MARKER}%`}`,
     () => sql()`DELETE FROM services WHERE name LIKE ${`${MARKER}%`} OR name LIKE ${`SecFind5%`}`,
     () => sql()`DELETE FROM providers WHERE name LIKE ${`${MARKER}%`}`,
     () => sql()`DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE ${`${MARKER}%`})`,
@@ -196,6 +245,7 @@ describe("Security Finding #5: server-derived checkout price + identity", () => 
       {
         providerId: approvedProviderId,
         serviceId: approvedServiceId,
+        dogId: dogAId,
         customerName: "SecFind5 Customer",
         customerEmail: `${MARKER}_customer@example.com`,
         date: tomorrowStr(),
@@ -244,6 +294,7 @@ describe("Security Finding #5: server-derived checkout price + identity", () => 
       {
         providerId: approvedProviderId,
         serviceId: approvedServiceId,
+        dogId: dogBId,
         customerName: "SecFind5 Customer",
         customerEmail: `${MARKER}_customer2@example.com`,
         date: tomorrowStr(),

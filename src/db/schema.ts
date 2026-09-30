@@ -78,6 +78,37 @@ export async function ensureBookingTablesSql(): Promise<{ success: true }> {
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_bps INTEGER NOT NULL DEFAULT 0`;
     await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`;
 
+    // Safety net: bring older bookings tables up to the canonical migration 009
+    // shape (Book MVP core: dog, lifecycle timestamps, availability, slot guard).
+    // Additive, idempotent — migration 009 remains the source of truth.
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS dog_id INTEGER`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`;
+    await sql()`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`;
+    await sql()`
+      CREATE TABLE IF NOT EXISTS provider_availability (
+        id SERIAL PRIMARY KEY,
+        provider_id INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        day_of_week SMALLINT NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        CHECK (end_time > start_time)
+      )
+    `;
+    try {
+      await sql()`CREATE UNIQUE INDEX IF NOT EXISTS provider_availability_window_key ON provider_availability (provider_id, day_of_week, start_time)`;
+      await sql()`
+        CREATE UNIQUE INDEX IF NOT EXISTS bookings_provider_slot_live_key
+          ON bookings (provider_id, booking_date, start_time)
+          WHERE status IN ('pending_payment', 'paid', 'completed')
+      `;
+    } catch (err) {
+      // A pre-migration database holding live duplicate slots cannot carry the
+      // unique index. Never take the booking tables down for it: booking-core
+      // still pre-checks the slot and logs the collision honestly.
+      console.warn("[schema] booking slot unique index not created", err);
+    }
+
     return { success: true };
 }
 

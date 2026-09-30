@@ -23,6 +23,8 @@ import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
 import { handleSafetyApi } from "./safety-api-handler.ts";
+import { handleProvidersApi } from "./provider-api-handler.ts";
+import { handleBookingApi } from "./booking-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 const toWebRequest = (req: IncomingMessage): Request => {
@@ -77,6 +79,14 @@ export function devApiPlugin(): Plugin {
               web = await handleMatchApi(toWebRequest(req));
             } else if (pathname.startsWith("/api/safety/")) {
               web = await handleSafetyApi(toWebRequest(req));
+            } else if (pathname.startsWith("/api/providers/")) {
+              web = await handleProvidersApi(toWebRequest(req));
+            } else if (
+              pathname === "/api/bookings" ||
+              pathname.startsWith("/api/bookings/") ||
+              pathname.startsWith("/api/services/")
+            ) {
+              web = await handleBookingApi(toWebRequest(req));
             } else if (req.method === "POST" && pathname === "/api/waitlist") {
               web = await handleWaitlistPost(toWebRequest(req));
             } else {

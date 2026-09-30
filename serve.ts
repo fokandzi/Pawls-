@@ -18,6 +18,7 @@ import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
 import { handleSafetyApi } from "./safety-api-handler.ts";
 import { handleProvidersApi } from "./provider-api-handler.ts";
+import { handleBookingApi } from "./booking-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
@@ -91,6 +92,16 @@ for (let attempt = 1; ; attempt++) {
         // (authenticated + throttled) and the admin-only approve/reject workflow.
         if (pathname.startsWith("/api/providers/")) {
           return handleProvidersApi(req);
+        }
+        // Booking API (GET/POST /api/bookings/*, POST /api/services/*) — Book MVP
+        // core (batch D1): availability, booking create with the server-side 409
+        // slot guard, cancel/complete lifecycle, owner-bound service edits.
+        if (
+          pathname === "/api/bookings" ||
+          pathname.startsWith("/api/bookings/") ||
+          pathname.startsWith("/api/services/")
+        ) {
+          return handleBookingApi(req);
         }
 
         // Native POST /api/waitlist — landing-page waitlist form posts here.

@@ -2,8 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { sql } from "../db";
-import { createBooking } from "../db/bookings";
-import { createCheckoutSession } from "../db/payments";
 import { createBookingTables } from "../db/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -68,14 +66,6 @@ function maxDateStr() {
   return d.toISOString().slice(0, 10);
 }
 
-function timeSlots() {
-  const slots: string[] = [];
-  for (let h = 8; h <= 17; h++) {
-    slots.push(`${String(h).padStart(2, "0")}:00`);
-    slots.push(`${String(h).padStart(2, "0")}:30`);
-  }
-  return slots;
-}
 
 // ── Route ────────────────────────────────────────────────────────────────────
 
@@ -88,7 +78,7 @@ const getProviderDetail = createServerFn({ method: "GET" })
     if (!Number.isInteger(providerId) || providerId < 1) throw new Error("providerId must be a positive integer");
     return { providerId };
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, request }) => {
     try {
       await createBookingTables();
       // REAL-ONLY clause, identical to /book and to the /book/register counter
@@ -97,8 +87,21 @@ const getProviderDetail = createServerFn({ method: "GET" })
       const [provider] = await sql()`SELECT p.id, p.name, p.category, p.description, p.location, p.image_url, p.rating, p.review_count FROM providers p JOIN users u ON u.id = p.owner_user_id WHERE p.id = ${data.providerId} AND p.is_demo = false AND p.approval_status = 'approved' AND p.owner_user_id IS NOT NULL AND u.is_test = false`;
       if (!provider) return { provider: null, services: [], error: "Provider not found" };
       const services = await sql()`SELECT id, name, price_cents, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
-      return { provider: provider as Provider, services, error: null };
-    } catch { return { provider: null, services: [], error: "Database not connected" }; }
+      // The customer books ONE OF THEIR OWN DOGS (batch D1). The offer below is
+      // convenience only: /api/bookings re-checks ownership server-side and
+      // refuses a dog that is not on the caller's account.
+      let dogs: { id: number; dog_name: string }[] = [];
+      let signedIn = false;
+      try {
+        const { getSessionUser } = await import("../lib/auth/session");
+        const user = request ? await getSessionUser(request) : null;
+        if (user) {
+          signedIn = true;
+          dogs = (await sql()`SELECT id, dog_name FROM dog_profiles WHERE user_id = ${user.id} AND is_demo = false ORDER BY id LIMIT 20`) as unknown as { id: number; dog_name: string }[];
+        }
+      } catch { dogs = []; }
+      return { provider: provider as Provider, services, dogs, signedIn, error: null };
+    } catch { return { provider: null, services: [], dogs: [], signedIn: false, error: "Database not connected" }; }
   });
 
 export const Route = createFileRoute("/book/$providerId")({
@@ -116,78 +119,102 @@ export const Route = createFileRoute("/book/$providerId")({
 // ── Component ────────────────────────────────────────────────────────────────
 
 function ProviderDetailPage() {
-  const { provider, services, error } = Route.useLoaderData();
-
+  const { provider, services, dogs, signedIn, error } = Route.useLoaderData();
   const [bookingService, setBookingService] = useState<Service | null>(null);
   const [form, setForm] = useState({ customerName: "", customerEmail: "", date: "", time: "" });
+  const [dogId, setDogId] = useState("");
+  const [daySlots, setDaySlots] = useState<string[]>([]);
+  const [availabilitySet, setAvailabilitySet] = useState<boolean | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [bookingResult, setBookingResult] = useState<{
     id: number; provider_name: string; service_name: string; date: string; time: string;
   } | null>(null);
-
   function openBooking(service: Service) {
     setBookingService(service);
     setForm({ customerName: "", customerEmail: "", date: "", time: "" });
+    setDogId(dogs && dogs.length ? String(dogs[0].id) : "");
+    setDaySlots([]);
+    setAvailabilitySet(null);
     setFormError("");
     setBookingResult(null);
     setSubmitting(false);
   }
-
   function closeBooking() {
     setBookingService(null);
     setFormError("");
   }
-
   function updateField(field: string, value: string) {
+    if (field === "date") void loadSlots(value);
     setForm((prev) => ({ ...prev, [field]: value }));
   }
-
+  // Slots come from the provider's PUBLISHED availability (migration 009). A day
+  // with no window offers no slot at all — we never show invented times.
+  async function loadSlots(date: string) {
+    if (!provider || !date) return;
+    setSlotsLoading(true);
+    try {
+      const res = await fetch(`/api/bookings/availability?providerId=${provider.id}&date=${date}`, {
+        headers: { Accept: "application/json" },
+      });
+      const body = (await res.json()) as { ok: boolean; availabilitySet?: boolean; slots?: string[] };
+      setAvailabilitySet(body.ok ? body.availabilitySet === true : false);
+      setDaySlots(body.ok ? body.slots ?? [] : []);
+    } catch {
+      setAvailabilitySet(false);
+      setDaySlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    if (!bookingService) return;
+    if (!bookingService || !provider) return;
     if (!form.customerName.trim() || !form.customerEmail.trim() || !form.date || !form.time) {
       setFormError("All fields are required.");
       return;
     }
+    if (!dogId) {
+      setFormError("Choose one of your dogs for this booking.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const result = await createBooking({
-        data: {
-          providerId: provider!.id,
+      // Same endpoint the regression exercises: every rule (real-only provider,
+      // availability window, dog ownership, slot guard) is enforced server-side.
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          providerId: provider.id,
           serviceId: bookingService.id,
+          dogId: Number(dogId),
           customerName: form.customerName.trim(),
           customerEmail: form.customerEmail.trim(),
           date: form.date,
           time: form.time,
-        },
+        }),
       });
-      if (result.success) {
-        setBookingResult(result.booking);
-        // Create Stripe checkout session for payment. Security #5: the server
-        // derives price/currency/product from the booking row — the client only
-        // sends the opaque booking id.
-        setCheckoutLoading(true);
-        try {
-          const checkoutResult = await createCheckoutSession({
-            data: {
-              bookingId: result.booking.id,
-            },
-          });
-          if ("url" in checkoutResult && checkoutResult.url) {
-            window.location.href = checkoutResult.url;
-            return;
-          }
-          // Payments not configured / checkout rejected — stay on confirmation card
-          setCheckoutLoading(false);
-        } catch {
-          // Stripe unavailable — stay on confirmation card
-          setCheckoutLoading(false);
-        }
+      const body = (await res.json()) as { ok: boolean; message?: string; messageFr?: string; booking?: { id: number } };
+      if (res.ok && body.ok && body.booking) {
+        setBookingResult({
+          id: body.booking.id,
+          provider_name: provider.name,
+          service_name: bookingService.name,
+          date: form.date,
+          time: form.time,
+        });
+        void loadSlots(form.date);
+      } else if (res.status === 409 && body.messageFr) {
+        setFormError(body.messageFr);
+        void loadSlots(form.date);
+      } else if (res.status === 401) {
+        setFormError("Please log in to book a service.");
       } else {
-        setFormError(result.error);
+        setFormError(body.messageFr || body.message || "Something went wrong. Please try again.");
       }
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -195,7 +222,6 @@ function ProviderDetailPage() {
       setSubmitting(false);
     }
   }
-
   // ── Error states ───────────────────────────────────────────────────────────
 
   if (error === "db_error") {
@@ -236,7 +262,6 @@ function ProviderDetailPage() {
   const cfg = categoryConfig[provider.category] ?? {
     label: provider.category, bg: "bg-gray-100", text: "text-gray-600", emoji: "",
   };
-  const slots = timeSlots();
 
   return (
     <>
@@ -316,16 +341,14 @@ function ProviderDetailPage() {
       {bookingService && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget && !submitting) closeBooking(); }}>
           <div className="w-full max-w-md rounded-2xl border border-[var(--pawls-cream-200)] bg-white p-6 shadow-2xl">
-            {bookingResult && checkoutLoading ? (
-              <div className="text-center">
-                <div className="mb-3 text-4xl animate-pulse"></div>
-                <h3 className="text-xl font-bold text-gray-900">Redirecting to payment…</h3>
-                <p className="mt-2 text-sm text-gray-500">You’ll be redirected to Stripe Checkout to complete your payment.</p>
-              </div>
-            ) : bookingResult ? (
+            {bookingResult ? (
               <div className="text-center">
                 <div className="mb-3 text-5xl"></div>
-                <h3 className="text-xl font-bold text-gray-900">Booking saved — payment pending</h3>
+                <h3 className="text-xl font-bold text-gray-900">Booking submitted — awaiting payment</h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  Your slot is held. Payments are not enabled yet, so nothing has been charged and the booking is not
+                  confirmed. You can cancel it free of charge from My bookings.
+                </p>
                 <div className="mt-4 space-y-2 rounded-xl bg-[var(--pawls-cream-50)] p-4 text-left text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Provider</span><span className="font-semibold text-gray-900">{bookingResult.provider_name}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">Service</span><span className="font-semibold text-gray-900">{bookingResult.service_name}</span></div>
@@ -333,9 +356,14 @@ function ProviderDetailPage() {
                   <div className="flex justify-between"><span className="text-gray-500">Time</span><span className="font-semibold text-gray-900">{bookingResult.time}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500">Booking ID</span><span className="font-mono text-xs font-semibold text-gray-700">#{bookingResult.id}</span></div>
                 </div>
-                <button type="button" onClick={closeBooking} className="mt-5 inline-flex items-center rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-                  Done
-                </button>
+                <div className="mt-5 flex flex-col gap-2">
+                  <Link to="/book/my-bookings" className="inline-flex items-center justify-center rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
+                    My bookings
+                  </Link>
+                  <button type="button" onClick={closeBooking} className="rounded-full border border-[var(--pawls-cream-200)] bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-[var(--pawls-cream-50)]">
+                    Close
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -363,6 +391,22 @@ function ProviderDetailPage() {
                     <input type="email" required value={form.customerEmail} onChange={(e) => updateField("customerEmail", e.target.value)} placeholder="jane@example.com" disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
                   </div>
                   <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Your dog</label>
+                    {dogs && dogs.length > 0 ? (
+                      <select required value={dogId} onChange={(e) => setDogId(e.target.value)} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50">
+                        {dogs.map((d) => (<option key={d.id} value={d.id}>{d.dog_name}</option>))}
+                      </select>
+                    ) : (
+                      <p className="rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] px-4 py-3 text-sm text-gray-700">
+                        {signedIn ? (
+                          <>Add a dog to your profile first — a booking is always tied to one of your own dogs. <Link to="/match/create" className="font-semibold text-[var(--pawls-terracotta-500)] underline">Add a dog</Link></>
+                        ) : (
+                          <>Log in to book — bookings are tied to your account and to one of your own dogs. <Link to="/login" className="font-semibold text-[var(--pawls-terracotta-500)] underline">Log in</Link></>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
                     <input type="date" required value={form.date} onChange={(e) => updateField("date", e.target.value)} min={todayStr()} max={maxDateStr()} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
                   </div>
@@ -370,13 +414,23 @@ function ProviderDetailPage() {
                     <label className="mb-1 block text-sm font-medium text-gray-700">Time</label>
                     <select required value={form.time} onChange={(e) => updateField("time", e.target.value)} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50">
                       <option value="">Select a time</option>
-                      {slots.map((slot) => (<option key={slot} value={slot}>{slot}</option>))}
+                      {daySlots.map((slot) => (<option key={slot} value={slot}>{slot}</option>))}
                     </select>
-                    <p className="mt-1 text-xs text-gray-400">Available 08:00–18:00, 30-min slots</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {!form.date
+                        ? "Pick a date to see the slots this provider actually published."
+                        : slotsLoading
+                          ? "Loading the provider's slots…"
+                          : availabilitySet === false
+                            ? "This provider has not published availability yet, so no slot can be booked."
+                            : daySlots.length === 0
+                              ? "No free slot left on that day."
+                              : "Slots inside the provider's published availability (30-minute steps)."}
+                    </p>
                   </div>
                   {formError && (<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div>)}
-                  <button type="submit" disabled={submitting} className="w-full rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)] disabled:cursor-not-allowed disabled:opacity-70">
-                    {submitting ? "Confirming…" : "Confirm booking"}
+                  <button type="submit" disabled={submitting || !form.time || !dogId} className="w-full rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)] disabled:cursor-not-allowed disabled:opacity-70">
+                    {submitting ? "Confirming…" : "Request this slot"}
                   </button>
                 </form>
               </>

@@ -17,6 +17,7 @@ import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
 import { handleSafetyApi } from "./safety-api-handler.ts";
 import { handleProvidersApi } from "./provider-api-handler.ts";
+import { handleBookingApi } from "./booking-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 const fetchHandler = handler as {
@@ -171,6 +172,31 @@ export default async function vercelHandler(
       return;
     }
 
+    // Booking API (GET/POST /api/bookings/*, POST /api/services/*) — Book MVP
+    // core (batch D1): availability, booking create with the server-side 409 slot
+    // guard, cancel/complete lifecycle, owner-bound service edits.
+    {
+      const bookingPath = new URL(request.url).pathname;
+      if (
+        bookingPath === "/api/bookings" ||
+        bookingPath.startsWith("/api/bookings/") ||
+        bookingPath.startsWith("/api/services/")
+      ) {
+        const bookingRes = await handleBookingApi(request);
+        res.statusCode = bookingRes.status;
+        bookingRes.headers.forEach((value, key) => res.setHeader(key, value));
+        if (bookingRes.body) {
+          const reader = bookingRes.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+        }
+        res.end();
+        return;
+      }
+    }
     const webRes = await fetchHandler.fetch(request);
     res.statusCode = webRes.status;
     webRes.headers.forEach((value, key) => res.setHeader(key, value));

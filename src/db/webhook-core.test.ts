@@ -126,6 +126,14 @@ async function insertService(providerId: number): Promise<number> {
   return Number(s.id);
 }
 
+// Migration 009 adds a UNIQUE index on (provider_id, booking_date, start_time) for
+// LIVE bookings, so every fixture booking in this suite needs its own slot.
+let slotCursor = 0;
+function nextSlot(): string {
+  const minutes = 9 * 60 + slotCursor++;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 async function insertBooking(opts: {
   userId: number;
   sessionId?: string | null;
@@ -144,7 +152,7 @@ async function insertBooking(opts: {
     )
     VALUES (
       ${approvedProviderId}, ${approvedServiceId}, 'SecFind9 Customer', ${opts.email ?? CUST_EMAIL},
-      ${futureDate()}::date, '09:00'::time,
+      ${futureDate()}::date, ${nextSlot()}::time,
       ${opts.status ?? "pending_payment"}, ${opts.userId},
       ${opts.priceCents ?? servicePriceCents}, ${opts.currency ?? "EUR"},
       ${opts.paymentStatus ?? "unpaid"}, 'none',
