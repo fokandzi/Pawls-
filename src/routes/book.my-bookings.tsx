@@ -189,7 +189,7 @@ function MyBookingsPage() {
                   </div>
                   <p className="mt-3 text-sm text-gray-600">{statusDetail(b)}</p>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <Link to="/book/booking-success" search={{ bookingId: String(b.id) }} className="rounded-full border border-[var(--pawls-cream-200)] px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-[var(--pawls-cream-100)]">
+                    <Link to="/book/booking-success" search={{ bookingId: b.id }} className="rounded-full border border-[var(--pawls-cream-200)] px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-[var(--pawls-cream-100)]">
                       View booking
                     </Link>
                     {cancellable && (

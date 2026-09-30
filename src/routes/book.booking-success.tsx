@@ -57,7 +57,9 @@ async function resolve(request: Request | null, bookingIdOverride: number | null
   let bookingId = bookingIdOverride;
   if (bookingId === null && request) {
     const param = new URL(request.url).searchParams.get("bookingId");
-    const parsed = Number(param);
+    // Tolerate a JSON-quoted value: older links (see validateSearch below)
+    // carried ?bookingId=%22<id>%22. Both spellings mean the same booking.
+    const parsed = Number(String(param ?? "").replace(/^"|"$/g, ""));
     bookingId = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
   }
 
@@ -96,10 +98,22 @@ const getBookingState = createServerFn({ method: "GET" })
 
 export const Route = createFileRoute("/book/booking-success")({
   head: () => seoHead(SEO["book/booking-success"]),
-  validateSearch: (search: Record<string, unknown>) => ({
-    bookingId: search.bookingId === undefined ? undefined : String(search.bookingId),
-    session_id: search.session_id === undefined ? undefined : String(search.session_id),
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    // The router re-serialises whatever validateSearch returns and answers 307
+    // when the result does not round-trip the incoming URL. A numeric-looking
+    // param arrives here already parsed as a NUMBER (`?bookingId=250` -> 250), so
+    // returning String(250) made the router rewrite every load to
+    // `?bookingId=%22250%22` — a redirect on a page a payment provider also
+    // links to. Keeping the number round-trips exactly, and a legacy quoted
+    // value is normalised back to the canonical numeric form.
+    const raw = search.bookingId;
+    const n = Number(typeof raw === "string" ? raw.replace(/^"|"$/g, "") : raw);
+    const bookingId = Number.isSafeInteger(n) && n > 0 ? n : undefined;
+    return {
+      bookingId,
+      session_id: search.session_id === undefined ? undefined : String(search.session_id),
+    };
+  },
   loader: () => getBookingState({ data: { bookingId: null } }),
   component: BookingSuccessPage,
 });
@@ -152,7 +166,7 @@ function stateCopy(state: BookingState): { title: string; body: string; tone: "n
 
 function BookingSuccessPage() {
   const loaderData = Route.useLoaderData() as BookingState;
-  const search = (Route.useSearch({ strict: false }) as Record<string, string>) ?? {};
+  const search = (Route.useSearch({ strict: false }) as { bookingId?: number; session_id?: string }) ?? {};
   const [state, setState] = useState<BookingState>(loaderData);
 
   // Client-side navigation: the loader may have run without the query string, so
