@@ -19,8 +19,11 @@ export async function ensureBookingTablesSql(): Promise<{ success: true }> {
         description TEXT NOT NULL,
         location TEXT NOT NULL,
         image_url TEXT,
-        rating NUMERIC(3,2) DEFAULT 4.5,
-        review_count INTEGER DEFAULT 0,
+        -- NO fabricated review data: rating/review_count are set only by a real
+        -- review. Migration 002/008 also DROP any inherited DEFAULT, so a fresh
+        -- environment can never invent a 4.5 rating for a provider.
+        rating NUMERIC(3,2),
+        review_count INTEGER,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;

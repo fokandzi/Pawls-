@@ -16,6 +16,7 @@ import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
 import { handleSafetyApi } from "./safety-api-handler.ts";
+import { handleProvidersApi } from "./provider-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 const fetchHandler = handler as {
@@ -143,6 +144,23 @@ export default async function vercelHandler(
       safetyRes.headers.forEach((value, key) => res.setHeader(key, value));
       if (safetyRes.body) {
         const reader = safetyRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+    // Provider API (GET + POST /api/providers/*) — /book/register applications
+    // (authenticated + throttled) and the admin-only approve/reject workflow.
+    if (new URL(request.url).pathname.startsWith("/api/providers/")) {
+      const providerRes = await handleProvidersApi(request);
+      res.statusCode = providerRes.status;
+      providerRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (providerRes.body) {
+        const reader = providerRes.body.getReader();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;

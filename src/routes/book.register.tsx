@@ -1,145 +1,76 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+/**
+ * /book/register — provider application (P1 batch C: honest + authenticated).
+ *
+ * What changed in batch C (launch audit 2026-09-28, finding #7):
+ *   - No manufactured social proof: the provider counter counts REAL providers
+ *     only (approved, non-demo, owner-bound, owned by a non-test user) via
+ *     GET /api/providers/count. When that is 0 the page says so honestly.
+ *   - No false claims on submit: the previous success screen told providers they
+ *     were "live on Pawls", promised a 12% commission, a provider dashboard,
+ *     automatic payouts and that "owners can find you" — none of which exists.
+ *     The new state says the application is submitted and UNDER REVIEW.
+ *   - Login required: the application is POSTed to /api/providers/register with
+ *     the session cookie; owner_user_id is derived server-side (401 when logged
+ *     out), the POST is CSRF-checked and rate limited (5/hour per IP), and the
+ *     row is created as approval_status = 'pending'. Failures are reported
+ *     honestly — never a fabricated success.
+ *   - providers.email/phone/website are formal schema (migration 008) instead of
+ *     per-request runtime DDL.
+ *
+ * FR-first: the new user-facing strings come from the i18n dict and render in
+ * the visitor's language (FR by default). The pre-existing form labels stay
+ * English until batch D localizes the whole Book surface — documented, not
+ * hidden.
+ */
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
-import { sql } from "../db";
-import { createBookingTables } from "../db/schema";
+import { countRealProviders } from "../lib/provider-core";
+import { t, DEFAULT_LANG, normalizeLang, type Lang } from "../lib/i18n";
 
-// ── Ensure email column exists ──────────────────────────────────────────────
-const ensureProviderEmailColumn = createServerFn({ method: "POST" }).handler(async () => {
-  await sql()`
-    ALTER TABLE providers
-    ADD COLUMN IF NOT EXISTS email TEXT
-  `;
-  await sql()`
-    ALTER TABLE providers
-    ADD COLUMN IF NOT EXISTS phone TEXT
-  `;
-  await sql()`
-    ALTER TABLE providers
-    ADD COLUMN IF NOT EXISTS website TEXT
-  `;
-  return { success: true };
-});
-
-// ── Server function: register provider ───────────────────────────────────────
-type RegisterProviderInput = {
-  name: string;
-  email: string;
-  category: string;
-  location: string;
-  description: string;
-  phone: string;
-  website: string;
-  services: { name: string; price_cents: number; duration_minutes: number }[];
-};
-
-type RegisterProviderResult =
-  | { success: true; providerId: number }
-  | { success: false; error: string };
-
-const registerProvider = createServerFn({ method: "POST" })
-  .validator((data: unknown): RegisterProviderInput => {
-    if (typeof data !== "object" || data === null) {
-      throw new Error("Invalid registration data");
-    }
-    const d = data as Record<string, unknown>;
-
-    const name = String(d.name ?? "").trim();
-    const email = String(d.email ?? "").trim().toLowerCase();
-    const category = String(d.category ?? "").trim();
-    const location = String(d.location ?? "").trim();
-    const description = String(d.description ?? "").trim();
-    const phone = String(d.phone ?? "").trim();
-    const website = String(d.website ?? "").trim();
-    const services = Array.isArray(d.services) ? d.services as RegisterProviderInput["services"] : [];
-
-    if (!name) throw new Error("Business name is required");
-    if (!email) throw new Error("Email is required");
-    if (!category) throw new Error("Service category is required");
-    if (!location) throw new Error("Location is required");
-    if (!description) throw new Error("Description is required");
-    if (services.length === 0) throw new Error("At least one service is required");
-
-    for (const s of services) {
-      if (!s.name?.trim()) throw new Error("Each service must have a name");
-      if (!s.price_cents || s.price_cents <= 0) throw new Error("Each service must have a valid price");
-      if (!s.duration_minutes || s.duration_minutes <= 0) throw new Error("Each service must have a valid duration");
-    }
-
-    return { name, email, category, location, description, phone, website, services };
-  })
-  .handler(async ({ data }): Promise<RegisterProviderResult> => {
-    try {
-      await createBookingTables();
-      await ensureProviderEmailColumn();
-
-      // Check for duplicate email
-      const [existing] = await sql()`
-        SELECT id FROM providers WHERE email = ${data.email}
-      `;
-      if (existing) {
-        return { success: false, error: "A provider with this email already exists." };
-      }
-
-      const [provider] = await sql()`
-        INSERT INTO providers (name, email, category, description, location, phone, website)
-        VALUES (${data.name}, ${data.email}, ${data.category}, ${data.description}, ${data.location}, ${data.phone}, ${data.website})
-        RETURNING id
-      `;
-
-      const providerId = Number(provider.id);
-
-      // Insert services
-      for (const s of data.services) {
-        await sql()`
-          INSERT INTO services (provider_id, name, price_cents, duration_minutes)
-          VALUES (${providerId}, ${s.name}, ${s.price_cents}, ${s.duration_minutes})
-        `;
-      }
-
-      return { success: true, providerId };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Database error";
-      return { success: false, error: message };
-    }
-  });
-
-// ── Server function: get provider count for social proof ─────────────────────
-const getProviderCount = createServerFn({ method: "GET" }).handler(async () => {
+// ── Server function: REAL provider count (never a raw COUNT(*)) ──────────────
+const getRealProviderCount = createServerFn({ method: "GET" }).handler(async () => {
   try {
-    const [row] = await sql()`SELECT COUNT(*)::int AS count FROM providers`;
-    return { count: Number(row.count) };
+    return { count: await countRealProviders() };
   } catch {
-    return { count: 0 };
+    // Unknown is not zero: the page then shows no number at all.
+    return { count: null as number | null };
   }
 });
 
-// ── Category config ──────────────────────────────────────────────────────────
+type RegisterResponse = {
+  ok?: boolean;
+  providerId?: number;
+  error?: string;
+  message?: string;
+  messageFr?: string;
+};
+
+// ── Category config (values must match PROVIDER_CATEGORIES server-side) ──────
 const categories = [
-  { value: "walker", label: " Dog Walker", description: "Walking and exercise services" },
-  { value: "groomer", label: " Groomer", description: "Grooming, washing, and styling" },
+  { value: "walker", label: "Dog Walker", description: "Walking and exercise services" },
+  { value: "groomer", label: "Groomer", description: "Grooming, washing, and styling" },
   { value: "sitter", label: "Sitter", description: "Daycare and overnight sitting" },
-  { value: "trainer", label: " Trainer", description: "Training, classes, and behaviour" },
-  { value: "vet", label: " Vet", description: "Veterinary care and check-ups" },
+  { value: "trainer", label: "Trainer", description: "Training, classes, and behaviour" },
+  { value: "vet", label: "Vet", description: "Veterinary care and check-ups" },
 ];
 
-// ── Route definition ─────────────────────────────────────────────────────────
 import { seoHead, SEO } from "../lib/seo";
 
 export const Route = createFileRoute("/book/register")({
   head: () => seoHead(SEO["book/register"]),
-  loader: () => getProviderCount(),
+  loader: () => getRealProviderCount(),
   component: ProviderRegisterPage,
 });
 
-// ── Form component ───────────────────────────────────────────────────────────
 function ProviderRegisterPage() {
   const { count } = Route.useLoaderData();
-  const router = useRouter();
 
+  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [form, setForm] = useState({
     name: "",
-    email: localStorage.getItem("pawls_email") || "",
+    email: "",
     category: "",
     location: "",
     description: "",
@@ -152,10 +83,31 @@ function ProviderRegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ providerId: number } | null>(null);
 
-  // Persist email to localStorage
+  // Session truth comes from the server (cookie -> DB), never from localStorage.
   useEffect(() => {
-    if (form.email) localStorage.setItem("pawls_email", form.email);
-  }, [form.email]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/auth/me", { headers: { accept: "application/json" } });
+        const me = await res.json();
+        if (cancelled) return;
+        if (me?.user) {
+          setLoggedIn(true);
+          setLang(normalizeLang(me.user.preferred_language));
+          if (typeof me.user.email === "string") {
+            setForm((prev) => (prev.email ? prev : { ...prev, email: String(me.user.email) }));
+          }
+        } else {
+          setLoggedIn(false);
+        }
+      } catch {
+        if (!cancelled) setLoggedIn(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -184,79 +136,63 @@ function ProviderRegisterPage() {
     setSubmitting(true);
 
     try {
-      const res = await registerProvider({
-        data: { ...form, services },
+      const res = await fetch("/api/providers/register", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ ...form, services }),
       });
-      if (res.success) {
-        setResult({ providerId: res.providerId });
-      } else {
-        setError(res.error);
+      const data = (await res.json().catch(() => ({}))) as RegisterResponse;
+      if (res.ok && data.ok && typeof data.providerId === "number") {
+        setResult({ providerId: data.providerId });
+        return;
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      // Honest failure: the server's own message, in the visitor's language.
+      const message = lang === "fr" ? data.messageFr ?? data.message : data.message ?? data.messageFr;
+      if (res.status === 401) {
+        setLoggedIn(false);
+        setError(message ?? t("provider.loginRequired", lang));
+      } else if (res.status === 429) {
+        setError(message ?? t("provider.rateLimited", lang));
+      } else {
+        setError(message ?? t("provider.errorGeneric", lang));
+      }
+    } catch {
+      setError(t("provider.errorGeneric", lang));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Success view ─────────────────────────────────────────────────────
+  // ── Submitted / under-review view (honest — nothing is live yet) ─────────
   if (result) {
     return (
       <div className="flex min-h-dvh flex-col">
-
         <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
           <section className="mx-auto max-w-2xl px-6 py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-              <span className="text-4xl"></span>
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--pawls-cream-100)]">
+              <span className="text-4xl">📝</span>
             </div>
-            <h1 className="text-3xl font-extrabold text-gray-900">You're live on Pawls!</h1>
-            <p className="mt-3 text-lg text-gray-600">
-              <strong>{form.name}</strong> is now listed. Dog owners can discover and book your services.
-            </p>
+            <h1 className="text-3xl font-extrabold text-gray-900">{t("provider.pendingTitle", lang)}</h1>
+            <p className="mt-3 text-lg text-gray-600">{t("provider.pendingBody", lang)}</p>
 
-            {/* Commission info */}
             <div className="mt-8 rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] p-6 text-left">
-              <h2 className="text-lg font-bold text-gray-900"> How bookings work</h2>
+              <h2 className="text-lg font-bold text-gray-900">{t("provider.pendingStatusTitle", lang)}</h2>
               <ul className="mt-3 space-y-2 text-sm text-gray-600">
-                <li>
-                  <strong>12% commission</strong> — Pawls takes 12% on each completed booking. You keep 88%.
-                </li>
-                <li>
-                  <strong>Instant booking</strong> — Owners can book your services directly through the app. No back-and-forth.
-                </li>
-                <li>
-                  <strong>You set your schedule</strong> — Manage availability and services from your provider dashboard.
-                </li>
-                <li>
-                  <strong>Automatic payouts</strong> — Payments are processed via Stripe and sent to your connected account.
-                </li>
+                <li>{t("provider.pendingStatusLine1", lang)}</li>
+                <li>{t("provider.pendingStatusLine2", lang)}</li>
+                <li>{t("provider.pendingStatusLine3", lang)}</li>
               </ul>
-            </div>
-
-            {/* What's next */}
-            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-6 text-left">
-              <h2 className="text-lg font-bold text-gray-900"> What's next?</h2>
-              <ol className="mt-3 list-inside list-decimal space-y-2 text-sm text-gray-600">
-                <li>Your listing is live — owners can find you on the{" "}
-                  <Link to="/book" className="font-medium text-[var(--pawls-terracotta-500)] hover:underline">services page</Link>
-                </li>
-                <li>Add more services from your provider profile</li>
-                <li>Share your provider page link to get your first bookings</li>
-                <li>Respond promptly to booking requests to build your reputation</li>
-              </ol>
+              <p className="mt-3 text-xs text-gray-500">
+                {t("provider.applicationRef", lang)} #{result.providerId}
+              </p>
             </div>
 
             <div className="mt-10 space-y-3">
               <Link
-                to="/book/$providerId"
-                params={{ providerId: String(result.providerId) }}
+                to="/book"
                 className="inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[var(--pawls-terracotta-700)]"
               >
-                View your listing →
-              </Link>
-              <br />
-              <Link to="/book" className="text-sm font-medium text-gray-500 hover:text-[var(--pawls-terracotta-500)] transition-colors">
-                ← Back to service directory
+                {t("provider.backToBook", lang)}
               </Link>
             </div>
           </section>
@@ -265,10 +201,9 @@ function ProviderRegisterPage() {
     );
   }
 
-  // ── Registration form view ───────────────────────────────────────────
+  // ── Application form ─────────────────────────────────────────────────────
   return (
     <div className="flex min-h-dvh flex-col">
-
       <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
         <section className="mx-auto max-w-2xl px-6 py-12">
           {/* Hero */}
@@ -277,25 +212,43 @@ function ProviderRegisterPage() {
               List Your Dog Business
             </h1>
             <p className="mx-auto mt-3 max-w-md text-base text-gray-600">
-              Get discovered by dog owners in Paris and across Île-de-France. List your services, take bookings, and grow your business — all with zero upfront cost.
+              Get discovered by dog owners in Paris and across Île-de-France. Apply to list your services on Pawls —
+              every application is reviewed before anything goes live.
             </p>
           </div>
 
-          {/* Social proof */}
-          {count > 0 && (
-            <div className="mb-8 rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 p-4 text-center">
-              <p className="text-sm font-medium text-[var(--pawls-ink-700)]">
-                 Join <strong>{count}</strong> provider{count !== 1 ? "s" : ""} already on Pawls
-              </p>
+          {/* Real supply counter — real provider rows only, honest when zero */}
+          {typeof count === "number" &&
+            (count > 0 ? (
+              <div className="mb-8 rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 p-4 text-center">
+                <p className="text-sm font-medium text-[var(--pawls-ink-700)]">
+                  {count} {lang === "fr" ? (count === 1 ? "prestataire approuvé" : "prestataires approuvés") : count === 1 ? "approved provider" : "approved providers"}
+                </p>
+              </div>
+            ) : (
+              <div className="mb-8 rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 p-4 text-center">
+                <p className="text-sm font-medium text-[var(--pawls-ink-700)]">{t("provider.counterNone", lang)}</p>
+              </div>
+            ))}
+
+          {/* Login required — applications are bound to a real account */}
+          {loggedIn === false && (
+            <div className="mb-6 rounded-2xl border border-[var(--pawls-terracotta-500)]/30 bg-[var(--pawls-cream-50)] p-5 text-left">
+              <h2 className="text-base font-bold text-gray-900">{t("provider.loginRequiredTitle", lang)}</h2>
+              <p className="mt-1 text-sm text-gray-600">{t("provider.loginRequired", lang)}</p>
+              <Link
+                to="/login"
+                className="mt-3 inline-flex items-center gap-2 rounded-full bg-[var(--pawls-terracotta-500)] px-5 py-2 text-sm font-semibold text-white"
+              >
+                {t("match.logIn", lang)}
+              </Link>
             </div>
           )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-8 shadow-sm">
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-                {error}
-              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>
             )}
 
             {/* Business name */}
@@ -437,10 +390,7 @@ function ProviderRegisterPage() {
               </div>
 
               {services.map((service, index) => (
-                <div
-                  key={index}
-                  className="mb-3 rounded-xl border border-[var(--pawls-cream-200)] bg-white p-4 last:mb-0"
-                >
+                <div key={index} className="mb-3 rounded-xl border border-[var(--pawls-cream-200)] bg-white p-4 last:mb-0">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-semibold text-gray-500">Service #{index + 1}</span>
                     {services.length > 1 && (
@@ -457,9 +407,7 @@ function ProviderRegisterPage() {
                   <div className="space-y-3">
                     {/* Service name */}
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600">
-                        Service Name
-                      </label>
+                      <label className="block text-xs font-semibold text-gray-600">Service Name</label>
                       <input
                         type="text"
                         required
@@ -473,9 +421,7 @@ function ProviderRegisterPage() {
                     {/* Price + Duration row */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600">
-                          Price (€)
-                        </label>
+                        <label className="block text-xs font-semibold text-gray-600">Price (€)</label>
                         <input
                           type="number"
                           required
@@ -491,9 +437,7 @@ function ProviderRegisterPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-gray-600">
-                          Duration (min)
-                        </label>
+                        <label className="block text-xs font-semibold text-gray-600">Duration (min)</label>
                         <input
                           type="number"
                           required
@@ -517,20 +461,17 @@ function ProviderRegisterPage() {
               disabled={submitting}
               className="w-full rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-all hover:bg-[var(--pawls-terracotta-700)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "Creating your listing..." : "List My Business — Free"}
+              {submitting ? t("provider.submitting", lang) : t("provider.submit", lang)}
             </button>
 
-            <p className="text-center text-xs text-gray-400">
-              By registering, you agree to Pawls' provider terms and 12% commission on bookings. No upfront costs — you only pay when you earn.
-            </p>
+            <p className="text-center text-xs text-gray-400">{t("provider.termsNote", lang)}</p>
           </form>
 
-          {/* Value prop footer */}
+          {/* Footer */}
           <div className="mt-10 text-center">
             <p className="text-sm text-gray-500">
-              Already registered?{" "}
               <Link to="/book" className="font-medium text-[var(--pawls-terracotta-500)] hover:underline">
-                Browse service providers →
+                {t("provider.browseProviders", lang)}
               </Link>
             </p>
           </div>

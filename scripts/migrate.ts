@@ -116,6 +116,13 @@ async function verifyScratch(sql: any) {
     ["reports", "SELECT 1 FROM information_schema.tables WHERE table_name='reports'"],
     ["commission_configs", "SELECT 1 FROM information_schema.tables WHERE table_name='commission_configs'"],
     ["providers.no_rating_default", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='rating' AND column_default IS NULL"],
+    // 008 provider registration truth + minimum approval workflow
+    ["providers.no_review_count_default", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='review_count' AND column_default IS NULL"],
+    ["providers.email", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='email'"],
+    ["providers.phone", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='phone'"],
+    ["providers.website", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='website'"],
+    ["providers.approved_at", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='approved_at'"],
+    ["providers.approved_by", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='approved_by'"],
     ["providers.approval_status", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='approval_status'"],
     ["providers.owner_user_id", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='owner_user_id'"],
     ["providers.is_demo", "SELECT 1 FROM information_schema.columns WHERE table_name='providers' AND column_name='is_demo'"],

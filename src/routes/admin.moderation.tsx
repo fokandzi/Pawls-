@@ -29,6 +29,27 @@ type AuditEntry = {
   created_at: string;
 };
 
+type AdminProvider = {
+  id: number;
+  name: string;
+  category: string;
+  location: string;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  approval_status: string;
+  is_demo: boolean;
+  owner_user_id: number | null;
+  owner_email: string | null;
+  owner_name: string | null;
+  owner_is_test: boolean | null;
+  approved_at: string | null;
+  approved_by: number | null;
+  created_at: string;
+  services_count: number;
+  approvable: boolean;
+};
+
 export const Route = createFileRoute("/admin/moderation")({
   head: () => seoHead(SEO["admin/moderation"]),
   component: ModerationPage,
@@ -71,6 +92,8 @@ function ModerationPage() {
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [openCount, setOpenCount] = useState(0);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [providers, setProviders] = useState<AdminProvider[]>([]);
+  const [realCount, setRealCount] = useState(0);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -87,6 +110,13 @@ function ModerationPage() {
     if (auditRes.ok) {
       const ad = await auditRes.json();
       setAudit(ad.entries);
+    }
+    // Provider approval queue (batch C) — admin only, read-only here.
+    const providersRes = await fetch("/api/providers/admin/queue", { headers: { accept: "application/json" } });
+    if (providersRes.ok) {
+      const pd = await providersRes.json();
+      setProviders(Array.isArray(pd.providers) ? pd.providers : []);
+      setRealCount(Number(pd.realCount ?? 0));
     }
     setPhase("ready");
   }
@@ -234,6 +264,113 @@ function ModerationPage() {
                   ))}
                 </div>
               )}
+
+              <div className="mt-10">
+                <h2 className="text-lg font-bold text-gray-900">{t("admin.providersHeading", L)}</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  {t("admin.realCount", L)} : {realCount}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">{t("admin.providersHint", L)}</p>
+
+                {providers.length === 0 ? (
+                  <p className="mt-3 text-sm text-gray-500">{t("admin.providersNone", L)}</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {providers.map((p) => (
+                      <div key={p.id} className="rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-5 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-bold text-gray-900">#{p.id}</span>
+                          <span className="font-semibold text-gray-800">{p.name}</span>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              p.approval_status === "pending"
+                                ? "bg-amber-100 text-amber-800"
+                                : p.approval_status === "approved"
+                                  ? "bg-green-100 text-green-700"
+                                  : p.approval_status === "rejected"
+                                    ? "bg-red-50 text-red-600"
+                                    : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {p.approval_status}
+                          </span>
+                          {p.is_demo && (
+                            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+                              démo
+                            </span>
+                          )}
+                          {p.owner_user_id === null && (
+                            <span className="rounded-full bg-[var(--pawls-cream-100)] px-2.5 py-0.5 text-xs font-semibold text-[var(--pawls-terracotta-700)]">
+                              {t("admin.unownedBadge", L)}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-400">{fmt(p.created_at)}</span>
+                        </div>
+                        <div className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+                          <p>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                              {t("admin.owner", L)}
+                            </span>
+                            <br />
+                            {p.owner_user_id === null
+                              ? "—"
+                              : `${p.owner_name ?? "—"} · ${p.owner_email ?? "—"} (#${p.owner_user_id})`}
+                          </p>
+                          <p>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                              {t("admin.servicesCount", L)}
+                            </span>
+                            <br />
+                            {p.services_count} · {p.category} · {p.location}
+                          </p>
+                          <p>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Contact</span>
+                            <br />
+                            {p.email ?? "—"} · {p.phone ?? "—"} · {p.website ?? "—"}
+                          </p>
+                          {p.approved_at && (
+                            <p>
+                              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                {t("admin.decidedAt", L)}
+                              </span>
+                              <br />
+                              {fmt(p.approved_at)} · #{p.approved_by ?? "?"}
+                            </p>
+                          )}
+                        </div>
+                        {p.approvable && (
+                          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--pawls-cream-100)] pt-4">
+                            <button
+                              disabled={busyId === p.id}
+                              onClick={async () => {
+                                setBusyId(p.id);
+                                await act(`/api/providers/admin/${p.id}/approve`, { note: "" });
+                                setBusyId(null);
+                              }}
+                              className="rounded-full bg-[var(--pawls-terracotta-500)] px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--pawls-terracotta-700)] disabled:opacity-50"
+                            >
+                              {t("admin.approve", L)}
+                            </button>
+                            <button
+                              disabled={busyId === p.id}
+                              onClick={async () => {
+                                const note = window.prompt(t("admin.note", L));
+                                if (note === null) return;
+                                setBusyId(p.id);
+                                await act(`/api/providers/admin/${p.id}/reject`, { note });
+                                setBusyId(null);
+                              }}
+                              className="rounded-full border border-[var(--pawls-cream-200)] px-4 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-[var(--pawls-cream-50)] disabled:opacity-50"
+                            >
+                              {t("admin.reject", L)}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="mt-10">
                 <h2 className="text-lg font-bold text-gray-900">{t("admin.audit", L)}</h2>

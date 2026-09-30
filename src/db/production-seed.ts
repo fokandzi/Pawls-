@@ -12,7 +12,10 @@ const sql = neon(url);
 const paris = ["Paris 5e", "Paris 6e", "Paris 9e", "Paris 11e", "Paris 15e", "Paris 16e", "Boulogne-Billancourt", "Montreuil", "Vincennes", "Saint-Denis", "Neuilly-sur-Seine", "Versailles"];
 
 async function seedProviders() {
-  await sql`CREATE TABLE IF NOT EXISTS providers (id SERIAL PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,description TEXT NOT NULL,location TEXT NOT NULL,image_url TEXT,rating NUMERIC(3,2) DEFAULT 4.5,review_count INTEGER DEFAULT 0,created_at TIMESTAMPTZ DEFAULT NOW())`;
+  // Demo-only DDL (this script is prod-guarded and fabricates demo ratings explicitly).
+  // No DEFAULT on rating/review_count: the schema must never invent review data
+  // on its own — batch C (migration 008) removed the fabricated defaults.
+  await sql`CREATE TABLE IF NOT EXISTS providers (id SERIAL PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,description TEXT NOT NULL,location TEXT NOT NULL,image_url TEXT,rating NUMERIC(3,2),review_count INTEGER,created_at TIMESTAMPTZ DEFAULT NOW())`;
   await sql`CREATE TABLE IF NOT EXISTS services (id SERIAL PRIMARY KEY,provider_id INTEGER REFERENCES providers(id),name TEXT NOT NULL,price_cents INTEGER NOT NULL,duration_minutes INTEGER NOT NULL,created_at TIMESTAMPTZ DEFAULT NOW())`;
   const [count] = await sql`SELECT COUNT(*)::int AS count FROM providers`;
   const names = ["Balades Belleville", "Pattes de Montmartre", "Le Spa des Toutous", "Moustaches & Compagnie", "Canis Major Training", "Clinique Vétérinaire Bastille", "Les Promenades du Canal", "Salon Toutou Chic", "Garde Douce Paris", "Éduca’Chien", "Veto République", "Au Poil Près"];

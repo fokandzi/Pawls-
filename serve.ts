@@ -17,6 +17,7 @@ import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
 import { handleMatchApi } from "./match-api-handler.ts";
 import { handleSafetyApi } from "./safety-api-handler.ts";
+import { handleProvidersApi } from "./provider-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
@@ -85,6 +86,11 @@ for (let attempt = 1; ; attempt++) {
         // Safety/Admin API (GET + POST /api/safety/*) — same pre-SSR pattern.
         if (pathname.startsWith("/api/safety/")) {
           return handleSafetyApi(req);
+        }
+        // Provider API (GET + POST /api/providers/*) — /book/register applications
+        // (authenticated + throttled) and the admin-only approve/reject workflow.
+        if (pathname.startsWith("/api/providers/")) {
+          return handleProvidersApi(req);
         }
 
         // Native POST /api/waitlist — landing-page waitlist form posts here.

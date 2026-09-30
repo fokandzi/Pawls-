@@ -7,6 +7,7 @@
  *   verify/reset-token:   10 / 1 hour per IP+token       ('verify-token' | 'reset-token')
  *   reset-request:        3 / 1 hour per email           ('reset-request')
  *   resend-verification:  5 / 1 hour per IP              ('resend-verification')
+ *   provider-register:    5 / 1 hour per IP              ('provider-register')
  *
  * Exceeded calls return { limited: true, retryAfterSeconds } so callers can
  * respond 429 with a Retry-After header. Old windows are cleaned up
@@ -27,6 +28,7 @@ const WINDOWS: Record<string, number> = {
   "reset-token": 60 * 60,
   "reset-request": 60 * 60,
   "resend-verification": 60 * 60,
+  "provider-register": 60 * 60,
 };
 
 const LIMITS: Record<string, number> = {
@@ -36,6 +38,7 @@ const LIMITS: Record<string, number> = {
   "reset-token": 10,
   "reset-request": 3,
   "resend-verification": 5,
+  "provider-register": 5,
 };
 
 export async function rateLimit(action: string, key: string): Promise<RateLimitResult> {
