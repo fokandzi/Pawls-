@@ -70,11 +70,22 @@ const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
     // P0 Data: REAL providers only — seeded/demo rows never appear as supply,
     // and only approved providers are bookable. There are none yet, so the
     // page shows the honest "coming soon" state.
+    //
+    // REAL-ONLY clause (identical to the /book/register counter in
+    // src/lib/provider-core.ts): a provider is public supply only when it is
+    // non-demo, approved, bound to a real owner account AND that owner is not a
+    // test account. Legacy unowned "approved" rows (owner_user_id IS NULL) and
+    // their fabricated ratings are therefore never listed — the public sees the
+    // honest empty state. The rows themselves are never deleted or modified.
     const rows = (await sql()`
-      SELECT id, name, category, description, location, image_url, rating, review_count
-      FROM providers
-      WHERE is_demo = false AND approval_status = 'approved'
-      ORDER BY rating DESC
+      SELECT p.id, p.name, p.category, p.description, p.location, p.image_url, p.rating, p.review_count
+      FROM providers p
+      JOIN users u ON u.id = p.owner_user_id
+      WHERE p.is_demo = false
+        AND p.approval_status = 'approved'
+        AND p.owner_user_id IS NOT NULL
+        AND u.is_test = false
+      ORDER BY p.rating DESC NULLS LAST, p.id DESC
     `) as Provider[];
     return { providers: rows, error: null };
   } catch {

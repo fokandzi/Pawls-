@@ -91,7 +91,10 @@ const getProviderDetail = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       await createBookingTables();
-      const [provider] = await sql()`SELECT id, name, category, description, location, image_url, rating, review_count FROM providers WHERE id = ${data.providerId} AND is_demo = false AND approval_status = 'approved'`;
+      // REAL-ONLY clause, identical to /book and to the /book/register counter
+      // (src/lib/provider-core.ts): an unowned legacy "approved" row (or one
+      // owned by a test account) is not public supply and has no bookable page.
+      const [provider] = await sql()`SELECT p.id, p.name, p.category, p.description, p.location, p.image_url, p.rating, p.review_count FROM providers p JOIN users u ON u.id = p.owner_user_id WHERE p.id = ${data.providerId} AND p.is_demo = false AND p.approval_status = 'approved' AND p.owner_user_id IS NOT NULL AND u.is_test = false`;
       if (!provider) return { provider: null, services: [], error: "Provider not found" };
       const services = await sql()`SELECT id, name, price_cents, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
       return { provider: provider as Provider, services, error: null };
