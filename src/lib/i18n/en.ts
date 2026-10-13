@@ -421,6 +421,16 @@ export const en: Record<string, string> = {
   "book.cat.trainer": "Trainer",
   "book.cat.vet": "Vet",
 
+  // Provider sign-up (batch D2)
+  "register.seoTitle": "List your dog business | Pawls",
+  "register.seoDesc": "Dog walker, groomer, sitter, trainer or vet in Paris? List your business on Pawls. Every application is reviewed and approved before publication — no payment is requested.",
+
+  // Provider detail (batch D2) — no "verified" claim
+  "detail.seoTitle": "Provider — Pawls",
+  "detail.seoDesc": "A provider reviewed and approved by Pawls: services, published availability and a booking request. Online payment is not enabled yet.",
+  "detail.seoNamedTitle": "{name} — {category} | Pawls",
+  "detail.seoNamedDesc": "{name}, {category} in {location}. Reviewed and approved by Pawls before being listed: services and availability published, online booking request (payment not enabled).",
+
   // Match — private Paris beta positioning
   "match.seoDesc": "Find playmates for your dog in Paris. Match is in private beta in Paris.",
   "match.betaPrivate": "Match — Private beta in Paris",

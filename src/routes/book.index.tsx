@@ -196,7 +196,7 @@ function BookPage() {
                               {Number(provider.rating).toFixed(1)}
                             </span>
                             <span className="text-xs text-gray-400">
-                              ({provider.review_count} reviews)
+                              {t("detail.reviewCount", L).split("{count}").join(String(provider.review_count))}
                             </span>
                           </div>
                         )}

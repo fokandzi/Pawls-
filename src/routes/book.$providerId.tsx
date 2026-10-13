@@ -3,6 +3,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { sql } from "../db";
 import { createBookingTables } from "../db/schema";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { LangToggle } from "../lib/lang-toggle";
+
+/**
+ * /book/$providerId — provider detail + booking request form.
+ *
+ * FR-first (batch D2): the language is resolved SERVER-SIDE from the session's
+ * `users.preferred_language` (FR default, see ../lib/i18n/route-lang) so the
+ * served HTML is already in the visitor's language; every user-facing string
+ * comes from the i18n dictionary.
+ *
+ * Truthfulness (batch D2): Pawls has NO verification programme. This page never
+ * calls a provider "verified"/« vérifié ». A listed provider is a provider that
+ * was REVIEWED AND APPROVED by Pawls — that is what the copy says, nothing more.
+ */
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,17 +39,17 @@ type Service = {
   duration_minutes: number;
 };
 
-// ── Category config ──────────────────────────────────────────────────────────
+// ── Category config (labels come from the dictionary) ────────────────────────
 
 const categoryConfig: Record<
   string,
-  { label: string; bg: string; text: string; emoji: string }
+  { labelKey: string; bg: string; text: string; emoji: string }
 > = {
-  walker: { label: "Walker", bg: "bg-emerald-100", text: "text-emerald-700", emoji: "" },
-  groomer: { label: "Groomer", bg: "bg-purple-100", text: "text-purple-700", emoji: "" },
-  sitter: { label: "Sitter", bg: "bg-sky-100", text: "text-sky-700", emoji: "" },
-  trainer: { label: "Trainer", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]", emoji: "" },
-  vet: { label: "Vet", bg: "bg-rose-100", text: "text-rose-700", emoji: "" },
+  walker: { labelKey: "provider.cat.walker", bg: "bg-emerald-100", text: "text-emerald-700", emoji: "" },
+  groomer: { labelKey: "provider.cat.groomer", bg: "bg-purple-100", text: "text-purple-700", emoji: "" },
+  sitter: { labelKey: "provider.cat.sitter", bg: "bg-sky-100", text: "text-sky-700", emoji: "" },
+  trainer: { labelKey: "provider.cat.trainer", bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]", emoji: "" },
+  vet: { labelKey: "provider.cat.vet", bg: "bg-rose-100", text: "text-rose-700", emoji: "" },
 };
 
 function renderStars(rating: number) {
@@ -55,6 +70,10 @@ function formatDuration(minutes: number) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function fill(template: string, vars: Record<string, string | number>): string {
+  return Object.entries(vars).reduce((acc, [k, v]) => acc.split(`{${k}}`).join(String(v)), template);
+}
+
 function todayStr() {
   const d = new Date();
   return d.toISOString().slice(0, 10);
@@ -69,7 +88,7 @@ function maxDateStr() {
 
 // ── Route ────────────────────────────────────────────────────────────────────
 
-import { seoHead, seoProvider } from "../lib/seo";
+import { seoHead } from "../lib/seo";
 
 const getProviderDetail = createServerFn({ method: "GET" })
   .validator((data: unknown) => {
@@ -79,13 +98,15 @@ const getProviderDetail = createServerFn({ method: "GET" })
     return { providerId };
   })
   .handler(async ({ data, request }) => {
+    const { resolveRequestLang } = await import("../lib/i18n/route-lang");
+    const lang = await resolveRequestLang(request);
     try {
       await createBookingTables();
       // REAL-ONLY clause, identical to /book and to the /book/register counter
       // (src/lib/provider-core.ts): an unowned legacy "approved" row (or one
       // owned by a test account) is not public supply and has no bookable page.
       const [provider] = await sql()`SELECT p.id, p.name, p.category, p.description, p.location, p.image_url, p.rating, p.review_count FROM providers p JOIN users u ON u.id = p.owner_user_id WHERE p.id = ${data.providerId} AND p.is_demo = false AND p.approval_status = 'approved' AND p.owner_user_id IS NOT NULL AND u.is_test = false`;
-      if (!provider) return { provider: null, services: [], error: "Provider not found" };
+      if (!provider) return { provider: null, services: [], dogs: [], signedIn: false, error: "PROVIDER_NOT_FOUND", lang };
       const services = await sql()`SELECT id, name, price_cents, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
       // The customer books ONE OF THEIR OWN DOGS (batch D1). The offer below is
       // convenience only: /api/bookings re-checks ownership server-side and
@@ -100,17 +121,32 @@ const getProviderDetail = createServerFn({ method: "GET" })
           dogs = (await sql()`SELECT id, dog_name FROM dog_profiles WHERE user_id = ${user.id} AND is_demo = false ORDER BY id LIMIT 20`) as unknown as { id: number; dog_name: string }[];
         }
       } catch { dogs = []; }
-      return { provider: provider as Provider, services, dogs, signedIn, error: null };
-    } catch { return { provider: null, services: [], dogs: [], signedIn: false, error: "Database not connected" }; }
+      return { provider: provider as Provider, services, dogs, signedIn, error: null, lang };
+    } catch { return { provider: null, services: [], dogs: [], signedIn: false, error: "DB_ERROR", lang }; }
   });
 
 export const Route = createFileRoute("/book/$providerId")({
   head: ({ loaderData }) => {
-    const d = loaderData as { provider: { name: string; category: string } | null };
+    const d = loaderData as {
+      provider: { id: number; name: string; category: string; location: string } | null;
+      lang?: Lang;
+    };
+    const L: Lang = d?.lang ?? DEFAULT_LANG;
     if (d?.provider) {
-      return seoHead(seoProvider(d.provider.name, d.provider.category));
+      // Canonical path is the real route (/book/<id>); the category label is the
+      // same one the page shows, in the visitor's language.
+      const categoryLabel = t(`provider.cat.${d.provider.category}`, L);
+      return seoHead({
+        title: fill(t("detail.seoNamedTitle", L), { name: d.provider.name, category: categoryLabel }),
+        description: fill(t("detail.seoNamedDesc", L), {
+          name: d.provider.name,
+          category: categoryLabel,
+          location: d.provider.location,
+        }),
+        path: `/book/${d.provider.id}`,
+      });
     }
-    return seoHead({ title: "Provider — Pawls", description: "View dog service provider details on Pawls.", path: "/book" });
+    return seoHead({ title: t("detail.seoTitle", L), description: t("detail.seoDesc", L), path: "/book" });
   },
   loader: ({ params }) => getProviderDetail({ data: { providerId: params.providerId } }),
   component: ProviderDetailPage,
@@ -119,7 +155,8 @@ export const Route = createFileRoute("/book/$providerId")({
 // ── Component ────────────────────────────────────────────────────────────────
 
 function ProviderDetailPage() {
-  const { provider, services, dogs, signedIn, error } = Route.useLoaderData();
+  const { provider, services, dogs, signedIn, error, lang } = Route.useLoaderData();
+  const L: Lang = lang ?? DEFAULT_LANG;
   const [bookingService, setBookingService] = useState<Service | null>(null);
   const [form, setForm] = useState({ customerName: "", customerEmail: "", date: "", time: "" });
   const [dogId, setDogId] = useState("");
@@ -173,11 +210,11 @@ function ProviderDetailPage() {
     setFormError("");
     if (!bookingService || !provider) return;
     if (!form.customerName.trim() || !form.customerEmail.trim() || !form.date || !form.time) {
-      setFormError("All fields are required.");
+      setFormError(t("detail.allFieldsRequired", L));
       return;
     }
     if (!dogId) {
-      setFormError("Choose one of your dogs for this booking.");
+      setFormError(t("detail.chooseDog", L));
       return;
     }
     setSubmitting(true);
@@ -208,49 +245,51 @@ function ProviderDetailPage() {
           time: form.time,
         });
         void loadSlots(form.date);
-      } else if (res.status === 409 && body.messageFr) {
-        setFormError(body.messageFr);
+      } else if (res.status === 409) {
+        // The server's own explanation, in the visitor's language (the slot-guard
+        // copy « Ce créneau vient d'être réservé » is the FR one).
+        setFormError((L === "fr" ? body.messageFr ?? body.message : body.message ?? body.messageFr) ?? t("detail.genericError", L));
         void loadSlots(form.date);
       } else if (res.status === 401) {
-        setFormError("Please log in to book a service.");
+        setFormError(t("detail.loginRequired", L));
       } else {
-        setFormError(body.messageFr || body.message || "Something went wrong. Please try again.");
+        setFormError((L === "fr" ? body.messageFr ?? body.message : body.message ?? body.messageFr) ?? t("detail.genericError", L));
       }
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } catch {
+      setFormError(t("detail.genericError", L));
     } finally {
       setSubmitting(false);
     }
   }
   // ── Error states ───────────────────────────────────────────────────────────
 
-  if (error === "db_error") {
+  if (error === "DB_ERROR") {
     return (
       <section className="flex flex-1 items-center justify-center bg-white px-6 py-20">
         <div className="flex flex-col items-center rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 px-6 py-20 text-center">
           <span className="text-5xl">⚠️</span>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Couldn’t load this provider</h2>
-          <p className="mt-2 max-w-md text-gray-600">We had trouble loading the booking details. Please try again.</p>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">{t("detail.dbErrorTitle", L)}</h2>
+          <p className="mt-2 max-w-md text-gray-600">{t("detail.dbErrorBody", L)}</p>
           <button type="button" onClick={() => window.location.reload()} className="mt-6 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-            Retry
+            {t("detail.retry", L)}
           </button>
-          <Link to="/book" className="mt-3 text-sm font-medium text-gray-500 hover:text-[var(--pawls-terracotta-500)]">← Back to all providers</Link>
+          <Link to="/book" className="mt-3 text-sm font-medium text-gray-500 hover:text-[var(--pawls-terracotta-500)]">{t("detail.backToProviders", L)}</Link>
         </div>
       </section>
     );
   }
 
-  if (error === "Provider not found" || !provider) {
+  if (error === "PROVIDER_NOT_FOUND" || !provider) {
     return (
       <section className="flex flex-1 items-center justify-center bg-white px-6 py-20">
         <div className="flex flex-col items-center rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 px-6 py-20 text-center">
           <span className="text-5xl"></span>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Provider not found</h2>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">{t("detail.notFoundTitle", L)}</h2>
           <p className="mt-2 max-w-md text-gray-600">
-            We couldn't find that service provider. They may have moved or the link might be incorrect.
+            {t("detail.notFoundBody", L)}
           </p>
           <Link to="/book" className="mt-6 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-            ← Back to all providers
+            {t("detail.backToProviders", L)}
           </Link>
         </div>
       </section>
@@ -260,17 +299,19 @@ function ProviderDetailPage() {
   // ── Normal render ──────────────────────────────────────────────────────────
 
   const cfg = categoryConfig[provider.category] ?? {
-    label: provider.category, bg: "bg-gray-100", text: "text-gray-600", emoji: "",
+    labelKey: "", bg: "bg-gray-100", text: "text-gray-600", emoji: "",
   };
+  const categoryLabel = cfg.labelKey ? t(cfg.labelKey, L) : provider.category;
 
   return (
     <>
-      {/* Back link */}
+      {/* Back link + explicit FR|EN switch (persisted on the visitor's account) */}
       <div className="bg-[var(--pawls-cream-50)] px-6 py-4">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Link to="/book" className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-[var(--pawls-terracotta-500)] transition-colors">
-            ← Back to all providers
+            {t("detail.backToProviders", L)}
           </Link>
+          {signedIn && <LangToggle lang={L} next={`/book/${provider.id}`} />}
         </div>
       </div>
 
@@ -284,7 +325,7 @@ function ProviderDetailPage() {
             <div className="flex-1">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
-                  {cfg.label}
+                  {categoryLabel}
                 </span>
                 <span className="text-sm text-gray-400"> {provider.location}</span>
               </div>
@@ -294,7 +335,7 @@ function ProviderDetailPage() {
               <div className="mt-2 flex items-center gap-1">
                 <span className="text-lg font-medium text-[var(--pawls-cream-50)]0">{renderStars(provider.rating)}</span>
                 <span className="text-lg font-semibold text-gray-700">{Number(provider.rating).toFixed(1)}</span>
-                <span className="text-sm text-gray-400">({provider.review_count} reviews)</span>
+                <span className="text-sm text-gray-400">{fill(t("detail.reviewCount", L), { count: provider.review_count })}</span>
               </div>
               )}
             </div>
@@ -305,9 +346,9 @@ function ProviderDetailPage() {
       {/* Services */}
       <section className="bg-white px-6 pb-10">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-5 text-xl font-bold text-gray-900">Services</h2>
+          <h2 className="mb-5 text-xl font-bold text-gray-900">{t("detail.servicesHeading", L)}</h2>
           {services.length === 0 ? (
-            <p className="text-gray-500 italic">No services listed yet.</p>
+            <p className="text-gray-500 italic">{t("detail.noServices", L)}</p>
           ) : (
             <div className="grid gap-3">
               {services.map((service) => (
@@ -319,7 +360,7 @@ function ProviderDetailPage() {
                   <div className="flex items-center gap-4">
                     <span className="text-lg font-bold text-[var(--pawls-terracotta-500)]">{formatEur(service.price_cents)}</span>
                     <button type="button" onClick={() => openBooking(service)} className="inline-flex items-center rounded-full bg-[var(--pawls-terracotta-500)] px-5 py-2 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-                      Book
+                      {t("detail.book", L)}
                     </button>
                   </div>
                 </div>
@@ -332,7 +373,7 @@ function ProviderDetailPage() {
       {/* About */}
       <section className="bg-[var(--pawls-cream-50)]/50 px-6 pb-20 pt-10">
         <div className="mx-auto max-w-3xl">
-          <h2 className="mb-4 text-xl font-bold text-gray-900">About</h2>
+          <h2 className="mb-4 text-xl font-bold text-gray-900">{t("detail.aboutHeading", L)}</h2>
           <p className="leading-relaxed text-gray-700">{provider.description}</p>
         </div>
       </section>
@@ -344,31 +385,30 @@ function ProviderDetailPage() {
             {bookingResult ? (
               <div className="text-center">
                 <div className="mb-3 text-5xl"></div>
-                <h3 className="text-xl font-bold text-gray-900">Booking submitted — awaiting payment</h3>
+                <h3 className="text-xl font-bold text-gray-900">{t("detail.successTitle", L)}</h3>
                 <p className="mt-2 text-sm text-gray-500">
-                  Your slot is held. Payments are not enabled yet, so nothing has been charged and the booking is not
-                  confirmed. You can cancel it free of charge from My bookings.
+                  {t("detail.successBody", L)}
                 </p>
                 <div className="mt-4 space-y-2 rounded-xl bg-[var(--pawls-cream-50)] p-4 text-left text-sm">
-                  <div className="flex justify-between"><span className="text-gray-500">Provider</span><span className="font-semibold text-gray-900">{bookingResult.provider_name}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Service</span><span className="font-semibold text-gray-900">{bookingResult.service_name}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Date</span><span className="font-semibold text-gray-900">{bookingResult.date}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Time</span><span className="font-semibold text-gray-900">{bookingResult.time}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Booking ID</span><span className="font-mono text-xs font-semibold text-gray-700">#{bookingResult.id}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{t("detail.successProvider", L)}</span><span className="font-semibold text-gray-900">{bookingResult.provider_name}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{t("detail.successService", L)}</span><span className="font-semibold text-gray-900">{bookingResult.service_name}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{t("detail.successDate", L)}</span><span className="font-semibold text-gray-900">{bookingResult.date}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{t("detail.successTime", L)}</span><span className="font-semibold text-gray-900">{bookingResult.time}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{t("detail.successBookingId", L)}</span><span className="font-mono text-xs font-semibold text-gray-700">#{bookingResult.id}</span></div>
                 </div>
                 <div className="mt-5 flex flex-col gap-2">
                   <Link to="/book/my-bookings" className="inline-flex items-center justify-center rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]">
-                    My bookings
+                    {t("detail.myBookings", L)}
                   </Link>
                   <button type="button" onClick={closeBooking} className="rounded-full border border-[var(--pawls-cream-200)] bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-[var(--pawls-cream-50)]">
-                    Close
+                    {t("detail.close", L)}
                   </button>
                 </div>
               </div>
             ) : (
               <>
                 <div className="mb-5 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-gray-900">Book: {bookingService.name}</h3>
+                  <h3 className="text-lg font-bold text-gray-900">{fill(t("detail.modalTitle", L), { service: bookingService.name })}</h3>
                   <button type="button" onClick={closeBooking} disabled={submitting} className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50">
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -376,22 +416,22 @@ function ProviderDetailPage() {
                   </button>
                 </div>
                 <div className="mb-3 flex items-center gap-2 rounded-xl bg-[var(--pawls-cream-50)] px-4 py-3 text-sm">
-                  <span className="text-gray-500">Price:</span>
+                  <span className="text-gray-500">{t("detail.price", L)}</span>
                   <span className="font-bold text-[var(--pawls-terracotta-500)]">{formatEur(bookingService.price_cents)}</span>
                   <span className="text-gray-300">·</span>
                   <span className="text-gray-500">{formatDuration(bookingService.duration_minutes)}</span>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Your name</label>
-                    <input type="text" required value={form.customerName} onChange={(e) => updateField("customerName", e.target.value)} placeholder="Jane Doe" disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{t("detail.yourName", L)}</label>
+                    <input type="text" required value={form.customerName} onChange={(e) => updateField("customerName", e.target.value)} placeholder={t("detail.yourNamePlaceholder", L)} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Your email</label>
-                    <input type="email" required value={form.customerEmail} onChange={(e) => updateField("customerEmail", e.target.value)} placeholder="jane@example.com" disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{t("detail.yourEmail", L)}</label>
+                    <input type="email" required value={form.customerEmail} onChange={(e) => updateField("customerEmail", e.target.value)} placeholder={t("detail.yourEmailPlaceholder", L)} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Your dog</label>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{t("detail.yourDog", L)}</label>
                     {dogs && dogs.length > 0 ? (
                       <select required value={dogId} onChange={(e) => setDogId(e.target.value)} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50">
                         {dogs.map((d) => (<option key={d.id} value={d.id}>{d.dog_name}</option>))}
@@ -399,38 +439,38 @@ function ProviderDetailPage() {
                     ) : (
                       <p className="rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] px-4 py-3 text-sm text-gray-700">
                         {signedIn ? (
-                          <>Add a dog to your profile first — a booking is always tied to one of your own dogs. <Link to="/match/create" className="font-semibold text-[var(--pawls-terracotta-500)] underline">Add a dog</Link></>
+                          <>{t("detail.addDogFirst", L)} <Link to="/match/create" className="font-semibold text-[var(--pawls-terracotta-500)] underline">{t("detail.addDog", L)}</Link></>
                         ) : (
-                          <>Log in to book — bookings are tied to your account and to one of your own dogs. <Link to="/login" className="font-semibold text-[var(--pawls-terracotta-500)] underline">Log in</Link></>
+                          <>{t("detail.loginToBook", L)} <Link to="/login" className="font-semibold text-[var(--pawls-terracotta-500)] underline">{t("detail.login", L)}</Link></>
                         )}
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{t("detail.date", L)}</label>
                     <input type="date" required value={form.date} onChange={(e) => updateField("date", e.target.value)} min={todayStr()} max={maxDateStr()} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Time</label>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{t("detail.time", L)}</label>
                     <select required value={form.time} onChange={(e) => updateField("time", e.target.value)} disabled={submitting} className="w-full rounded-xl border border-[var(--pawls-cream-200)] bg-white px-4 py-2.5 text-gray-900 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30 disabled:opacity-50">
-                      <option value="">Select a time</option>
+                      <option value="">{t("detail.selectTime", L)}</option>
                       {daySlots.map((slot) => (<option key={slot} value={slot}>{slot}</option>))}
                     </select>
                     <p className="mt-1 text-xs text-gray-400">
                       {!form.date
-                        ? "Pick a date to see the slots this provider actually published."
+                        ? t("detail.pickDate", L)
                         : slotsLoading
-                          ? "Loading the provider's slots…"
+                          ? t("detail.loadingSlots", L)
                           : availabilitySet === false
-                            ? "This provider has not published availability yet, so no slot can be booked."
+                            ? t("detail.noAvailabilityPublished", L)
                             : daySlots.length === 0
-                              ? "No free slot left on that day."
-                              : "Slots inside the provider's published availability (30-minute steps)."}
+                              ? t("detail.noFreeSlot", L)
+                              : t("detail.slotsHint", L)}
                     </p>
                   </div>
                   {formError && (<div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div>)}
                   <button type="submit" disabled={submitting || !form.time || !dogId} className="w-full rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)] disabled:cursor-not-allowed disabled:opacity-70">
-                    {submitting ? "Confirming…" : "Request this slot"}
+                    {submitting ? t("detail.confirm", L) : t("detail.requestSlot", L)}
                   </button>
                 </form>
               </>

@@ -422,6 +422,16 @@ export const fr: Record<string, string> = {
   "book.cat.trainer": "Éducateur",
   "book.cat.vet": "Vétérinaire",
 
+  // Inscription prestataire (batch D2)
+  "register.seoTitle": "Inscrivez votre activité canine | Pawls",
+  "register.seoDesc": "Promeneur, toiletteur, garde, éducateur ou vétérinaire à Paris ? Proposez votre activité sur Pawls. Chaque candidature est examinée et approuvée avant publication — aucun paiement n'est demandé.",
+
+  // Fiche prestataire (batch D2) — aucune mention « vérifié »
+  "detail.seoTitle": "Prestataire — Pawls",
+  "detail.seoDesc": "Fiche d'un prestataire examiné et approuvé par Pawls : prestations proposées, disponibilités publiées et demande de réservation. Le paiement en ligne n'est pas encore activé.",
+  "detail.seoNamedTitle": "{name} — {category} | Pawls",
+  "detail.seoNamedDesc": "{name}, {category} à {location}. Prestataire examiné et approuvé par Pawls avant publication : prestations et disponibilités publiées, demande de réservation en ligne (paiement non activé).",
+
   // Match — positionnement bêta privée à Paris (honnête)
   "match.seoDesc": "Trouvez des compagnons de jeu pour votre chien à Paris. Match est en bêta privée à Paris.",
   "match.betaPrivate": "Match — Bêta privée à Paris",
