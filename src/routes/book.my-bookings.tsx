@@ -58,12 +58,17 @@ const getMyBookings = createServerFn({ method: "GET" }).handler(async ({ request
 });
 
 export const Route = createFileRoute("/book/my-bookings")({
-  head: () =>
-    seoHead({
-      title: t("myBookings.seoTitle", DEFAULT_LANG),
-      description: t("myBookings.seoDesc", DEFAULT_LANG),
+  // The metadata follows the SAME server-resolved language as the page body: a
+  // visitor who switched to EN must not get a French <title>/og:title (batch D2
+  // G9 asserts the absence of « Mes réservations » on the EN rendering).
+  head: ({ loaderData }) => {
+    const L: Lang = (loaderData as { lang?: Lang } | undefined)?.lang ?? DEFAULT_LANG;
+    return seoHead({
+      title: t("myBookings.seoTitle", L),
+      description: t("myBookings.seoDesc", L),
       path: "/book/my-bookings",
-    }),
+    });
+  },
   loader: () => getMyBookings(),
   component: MyBookingsPage,
 });

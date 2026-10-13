@@ -109,13 +109,17 @@ const getBookingState = createServerFn({ method: "GET" })
   .handler(async ({ data, request }): Promise<BookingState> => resolve(request, data.bookingId));
 
 export const Route = createFileRoute("/book/booking-success")({
-  head: () =>
-    seoHead({
-      title: t("success.seoTitle", DEFAULT_LANG),
-      description: t("success.seoDesc", DEFAULT_LANG),
+  // Same rule as the rest of the Book surfaces (batch D2): the metadata uses the
+  // server-resolved language of the visitor, never a hard-coded FR default.
+  head: ({ loaderData }) => {
+    const L: Lang = (loaderData as { lang?: Lang } | undefined)?.lang ?? DEFAULT_LANG;
+    return seoHead({
+      title: t("success.seoTitle", L),
+      description: t("success.seoDesc", L),
       path: "/book/booking-success",
       noIndex: true,
-    }),
+    });
+  },
   validateSearch: (search: Record<string, unknown>) => {
     // The router re-serialises whatever validateSearch returns and answers 307
     // when the result does not round-trip the incoming URL. A numeric-looking
