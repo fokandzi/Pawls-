@@ -215,7 +215,13 @@ export async function handleBookingApi(request: Request): Promise<Response> {
       },
     );
     if (!created.ok) return coreError(request, created, "customer");
-    return result(request, true, "booking_created", 201, { role: "customer", booking: created.booking });
+    return result(request, true, "booking_created", 201, {
+      role: "customer",
+      booking: created.booking,
+      // Honest per-recipient email outcome (batch D2) — 'test' means nothing was
+      // sent because no RESEND_API_KEY is configured. Never a claimed delivery.
+      notifications: created.booking.notifications,
+    });
   }
 
   // ── Customer: own bookings ────────────────────────────────────────────────
@@ -285,7 +291,7 @@ export async function handleBookingApi(request: Request): Promise<Response> {
       try {
         const done = await cancelBookingForActor(auth.user.id, bookingId);
         if (!done.ok) return coreError(request, done, done.status === 403 ? "provider" : "customer");
-        return result(request, true, "booking_cancelled", 200, { booking: done.booking });
+        return result(request, true, "booking_cancelled", 200, { booking: done.booking, notifications: done.notifications });
       } catch (err) {
         console.error("[booking-api] cancel failed", err);
         return json({ ok: false, error: "DB_UNAVAILABLE", message: "We couldn't cancel. Nothing was changed." }, 503);
@@ -296,7 +302,7 @@ export async function handleBookingApi(request: Request): Promise<Response> {
       try {
         const done = await completeBookingForActor(auth.user.id, bookingId);
         if (!done.ok) return coreError(request, done, "provider");
-        return result(request, true, "booking_completed", 200, { role: "provider", booking: done.booking });
+        return result(request, true, "booking_completed", 200, { role: "provider", booking: done.booking, notifications: done.notifications });
       } catch (err) {
         console.error("[booking-api] complete failed", err);
         return json({ ok: false, error: "DB_UNAVAILABLE", message: "We couldn't complete. Nothing was changed." }, 503);

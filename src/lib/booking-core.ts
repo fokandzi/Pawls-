@@ -25,6 +25,12 @@
  */
 import { sql } from "../db";
 import { writeAudit } from "./auth/ensure";
+import {
+  notifyBookingCancelled,
+  notifyBookingCompleted,
+  notifyBookingCreated,
+  type EmailOutcome,
+} from "./booking-emails";
 
 export interface CoreError {
   ok: false;
@@ -310,6 +316,12 @@ export interface CreatedBooking {
   currency: string;
   status: string;
   payment_status: string;
+  /**
+   * Honest per-recipient email outcome (batch D2): 'sent' (Resend accepted),
+   * 'test' (no RESEND_API_KEY — nothing was sent, logged to mail_log) or
+   * 'failed'. Never 'sent' unless the provider really accepted the message.
+   */
+  notifications?: { customer: EmailOutcome; provider: EmailOutcome };
 }
 
 export type CreateBookingResult = { ok: true; status: 201; booking: CreatedBooking } | CoreError;
@@ -416,10 +428,10 @@ export async function createBookingForActor(actor: BookingActor, input: BookingC
     return fail(400, "DOG_REQUIRED", "Choose one of your dogs for this booking.", "Choisissez l'un de vos chiens pour cette réservation.");
   }
   const dogs = (await sql()`
-    SELECT id FROM dog_profiles
+    SELECT id, dog_name FROM dog_profiles
     WHERE id = ${dogId as number} AND user_id = ${Number(actor.userId)} AND is_demo = false
     LIMIT 1
-  `) as unknown as { id: number }[];
+  `) as unknown as { id: number; dog_name: string | null }[];
   if (!dogs?.length) {
     return fail(
       403,
@@ -492,6 +504,27 @@ export async function createBookingForActor(actor: BookingActor, input: BookingC
       currency,
     });
 
+    // Transactional emails (batch D2): (a) customer receipt, (b) provider
+    // notification. Contained — a mail problem never fails the booking, and the
+    // honest outcome is returned to the caller (never a claimed delivery).
+    const notifications = await notifyBookingCreated(providerId, {
+      id: bookingId,
+      providerName: String(provider.name ?? ""),
+      serviceName: service.name === null || service.name === undefined ? null : String(service.name),
+      date,
+      time,
+      priceCents,
+      currency,
+      status: "pending_payment",
+      paymentStatus: "unpaid",
+      dogName: dogs[0]?.dog_name === null || dogs[0]?.dog_name === undefined ? null : String(dogs[0].dog_name),
+      customerName,
+      customerEmail,
+      customerUserId: Number(actor.userId),
+      customerLang: null,
+      providerOwnerUserId: provider.owner_user_id === null ? null : Number(provider.owner_user_id),
+    });
+
     return {
       ok: true,
       status: 201,
@@ -508,6 +541,7 @@ export async function createBookingForActor(actor: BookingActor, input: BookingC
         currency,
         status: "pending_payment",
         payment_status: "unpaid",
+        notifications,
       },
     };
   } catch (err) {
@@ -624,7 +658,31 @@ export async function bookingForActor(actorUserId: number, bookingId: number): P
   return mine || ownedByMe ? booking : null;
 }
 
-export type LifecycleResult = { ok: true; status: 200; booking: BookingRow } | CoreError;
+export type LifecycleResult =
+  | { ok: true; status: 200; booking: BookingRow; notifications?: { customer: EmailOutcome; provider: EmailOutcome } }
+  | CoreError;
+
+/** Build the email facts from a stored booking row (shared by cancel/complete). */
+function factsFromRow(booking: BookingRow, cancelledBy?: string | null) {
+  return {
+    id: booking.id,
+    providerName: booking.provider_name,
+    serviceName: booking.service_name,
+    date: booking.booking_date,
+    time: booking.start_time,
+    priceCents: booking.price_cents,
+    currency: booking.currency,
+    status: booking.status,
+    paymentStatus: booking.payment_status,
+    dogName: booking.dog_name,
+    customerName: booking.customer_name,
+    customerEmail: booking.customer_email,
+    customerUserId: booking.customer_user_id,
+    customerLang: null,
+    providerOwnerUserId: booking.provider_owner_user_id,
+    cancelledBy: cancelledBy ?? null,
+  };
+}
 
 /**
  * Cancel policy (documented minimal, batch D1):
@@ -701,7 +759,10 @@ export async function cancelBookingForActor(actorUserId: number, bookingId: numb
   });
 
   const after = await bookingForActor(uid, booking.id);
-  return { ok: true, status: 200, booking: after ?? booking };
+  const finalRow = after ?? booking;
+  // (c) cancellation email to the customer and the provider, honestly reported.
+  const notifications = await notifyBookingCancelled(booking.provider_id, factsFromRow(finalRow, by));
+  return { ok: true, status: 200, booking: finalRow, notifications };
 }
 
 /**
@@ -754,7 +815,10 @@ export async function completeBookingForActor(actorUserId: number, bookingId: nu
   });
 
   const after = await bookingForActor(uid, booking.id);
-  return { ok: true, status: 200, booking: after ?? booking };
+  const finalRow = after ?? booking;
+  // (d) completion email to the customer and the provider.
+  const notifications = await notifyBookingCompleted(booking.provider_id, factsFromRow(finalRow));
+  return { ok: true, status: 200, booking: finalRow, notifications };
 }
 
 // ── services (owner-bound edit / deactivate) ────────────────────────────────
