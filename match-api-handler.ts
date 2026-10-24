@@ -96,12 +96,28 @@ export async function handleMatchApi(request: Request): Promise<Response> {
     case "/api/match/mine": {
       if (!sessionUser) return json({ user: null, dogs: [] });
       const dogs = await getMyDogs(sessionUser.id).catch(() => []);
+      // `is_test` is a DB column, not a session field: read it exactly like
+      // /api/match/discovery does below, so a test account is never reported as
+      // a real one (the old hardcoded `false` was a contract bug — audit §D).
+      // The read is non-fatal: if it fails the response keeps `isTest: false`,
+      // which is the safe (non-promotional) default.
+      const isTest = await (async () => {
+        try {
+          const [row] = await sql()`SELECT is_test FROM users WHERE id = ${sessionUser.id}`;
+          return !!((row as any)?.is_test);
+        } catch {
+          return false;
+        }
+      })();
       return json({
         user: {
           id: sessionUser.id,
           email: sessionUser.email,
           lang: sessionUser.preferredLanguage === "en" ? "en" : "fr",
-          isTest: false, // SessionUser has no is_test; core reads it from DB when needed
+          isTest,
+          // Drives the persistent, truthful "email non vérifiée" banner in the
+          // Match UI (P0 login-gate companion). Server-derived only.
+          emailVerified: sessionUser.emailVerified,
         },
         dogs,
       });

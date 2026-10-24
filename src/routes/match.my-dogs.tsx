@@ -33,11 +33,16 @@ function MyDogsPage() {
   const [error, setError] = useState("");
   const [updated, setUpdated] = useState(search.updated === "1");
   const [deleted, setDeleted] = useState(search.deleted === "1");
-  // Photo notices come from the server redirect (?photo=saved|removed|failed) —
-  // "failed" is the honest outcome when a photo could not be stored, so the
-  // owner is told instead of silently losing their upload.
+  // Photo notices come from the server redirect
+  // (?photo=saved|removed|failed|unavailable) — "failed" is the honest outcome
+  // when a photo could not be stored, so the owner is told instead of silently
+  // losing their upload. "unavailable" means object storage is not configured
+  // here (503): nothing was saved, and retrying cannot help until it is set up.
   const [photoNotice] = useState<string>(
-    search.photo === "saved" || search.photo === "removed" || search.photo === "failed"
+    search.photo === "saved" ||
+      search.photo === "removed" ||
+      search.photo === "failed" ||
+      search.photo === "unavailable"
       ? String(search.photo)
       : "",
   );
@@ -79,6 +84,7 @@ function MyDogsPage() {
           {photoNotice === "saved" && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{t("photo.saved", L)}</div>}
           {photoNotice === "removed" && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">{t("photo.removed", L)}</div>}
           {photoNotice === "failed" && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">{t("photo.failed", L)}</div>}
+          {photoNotice === "unavailable" && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800">{t("photo.unavailable", L)}</div>}
 
           {status === "loading" && (
             <div className="flex justify-center py-12">

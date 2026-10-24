@@ -23,6 +23,7 @@ import {
 } from "./lib/auth/pages";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./lib/password-policy";
 import { requireUser } from "./lib/auth/authz";
+import { verificationGate } from "./lib/auth/login-gate";
 import { deleteUserAccount } from "./lib/auth/deletion";
 import { verifyAttributionToken } from "./lib/attribution";
 
@@ -475,7 +476,7 @@ async function handleLogin(request: Request): Promise<Response> {
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   try {
     await ensureAuthTables();
-    const rows = await sql()`SELECT id, email, name, password_hash, suspended_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1`;
+    const rows = await sql()`SELECT id, email, name, password_hash, suspended_at, email_verified_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1`;
     const user = rows[0] as any;
     const ok = user ? await verifyPassword(password, user.password_hash) : false;
     if (!user || !ok) {
@@ -500,6 +501,40 @@ async function handleLogin(request: Request): Promise<Response> {
         status: 403,
         links: NAV_HOME_LOGIN,
       });
+    }
+    // Unverified-address gate (P0). A registered-but-unverified account must
+    // not get a full session while outbound email actually works — that is an
+    // address nobody proved they own. When mail delivery is NOT configured
+    // (today: no RESEND_API_KEY anywhere) nobody could ever verify, so blocking
+    // would lock every user out; the login is allowed and the signed-in UI
+    // shows a persistent, truthful "email non vérifiée" banner instead. The
+    // branch flips by itself the day the Resend key lands.
+    const gate = verificationGate({
+      emailVerifiedAt: user.email_verified_at,
+      mailConfigured: emailConfigured(),
+    });
+    if (gate === "block-unverified") {
+      // No session is issued, and we say exactly why. `/verify-email` explains
+      // the flow; the register form re-issues a verification link for an
+      // unverified address (the session-only resend endpoint cannot be used
+      // here: refusing the session is the whole point of this branch).
+      return errorPage(request, {
+        titleKey: "auth.err.unverifiedLoginTitle",
+        bodyKey: "auth.err.unverifiedLoginBody",
+        bodyArgs: { email: user.email },
+        status: 403,
+        links: [
+          { href: "/verify-email", labelKey: "auth.nav.verify" },
+          { href: "/login", labelKey: "auth.nav.login" },
+          { href: "/", labelKey: "auth.nav.home" },
+        ],
+      });
+    }
+    if (gate === "allow-unverified") {
+      // Honest, non-blocking: nothing claims the address is verified.
+      console.warn(
+        `[auth] login allowed for unverified user ${user.id}: outbound email is not configured, so no verification could ever be sent`,
+      );
     }
     if (isLegacySha256Hash(user.password_hash)) {
       await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${user.id}`;

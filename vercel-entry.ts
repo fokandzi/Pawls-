@@ -19,6 +19,8 @@ import { handleSafetyApi } from "./safety-api-handler.ts";
 import { handleProvidersApi } from "./provider-api-handler.ts";
 import { handleBookingApi } from "./booking-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
+import { handleHealthRequest } from "./src/lib/health.ts";
+import { guardPageRequest } from "./src/lib/auth/page-guard.ts";
 
 const fetchHandler = handler as {
   fetch: (request: Request) => Response | Promise<Response>;
@@ -51,6 +53,46 @@ export default async function vercelHandler(
 ): Promise<void> {
   try {
     const request = toWebRequest(req);
+
+    // GET /health — anonymous, minimal, truthful (batch E seed): DB reachability
+    // + whether photo storage is really configured. Pre-SSR so a probe never
+    // pays for a React render.
+    if (new URL(request.url).pathname === "/health") {
+      const healthRes = await handleHealthRequest(request);
+      res.statusCode = healthRes.status;
+      healthRes.headers.forEach((value, key) => res.setHeader(key, value));
+      if (healthRes.body) {
+        const reader = healthRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+      return;
+    }
+
+    // Page-level access guards that must answer with a real status BEFORE the
+    // SSR render: /settings (anon → 302 /login) and /admin/* (anon → 302,
+    // non-admin → 404). See src/lib/auth/page-guard.ts.
+    {
+      const guarded = await guardPageRequest(request);
+      if (guarded) {
+        res.statusCode = guarded.status;
+        guarded.headers.forEach((value, key) => res.setHeader(key, value));
+        if (guarded.body) {
+          const reader = guarded.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+        }
+        res.end();
+        return;
+      }
+    }
 
     // Native auth endpoints (POST /auth/*, GET /auth/me) — handled pre-SSR.
     if (
