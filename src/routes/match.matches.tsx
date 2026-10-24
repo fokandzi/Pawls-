@@ -1,8 +1,8 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { seoHead, SEO } from "../lib/seo";
-import { t, normalizeLang, type Lang } from "../lib/i18n";
+import { seoHead } from "../lib/seo";
+import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 import { ReportModal, safetyPost } from "../lib/safety-ui";
 import { DogPhoto } from "../lib/dog-photo-ui";
@@ -27,7 +27,14 @@ type MatchRow = {
 type RelStatus = { blockedByMe: boolean; blockedMe: boolean; matchState: "active" | "unmatched" | "none" };
 
 export const Route = createFileRoute("/match/matches")({
-  head: () => seoHead(SEO["match/matches"]),
+  // FR-first SSR title/meta (P2 item 5): same pattern as /match and /book —
+  // the title comes from the i18n dictionary, not a static EN-only map.
+  head: () =>
+    seoHead({
+      title: t("matches.title", DEFAULT_LANG),
+      description: t("matches.seoDesc", DEFAULT_LANG),
+      path: "/match/matches",
+    }),
   component: MatchesPage,
 });
 

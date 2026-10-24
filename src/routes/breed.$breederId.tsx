@@ -101,15 +101,33 @@ function ageInWeeks(dateStr: string): number {
   return Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 7));
 }
 
-import { seoHead, seoBreeder } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG } from "../lib/i18n";
+
+/** Minimal {placeholder} interpolation for the SEO templates (same shape the
+ * /book/$providerId detail route uses). */
+function seoFill(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? "");
+}
 
 export const Route = createFileRoute("/breed/$breederId")({
+  // FR-first SSR title/meta (P2 item 5): the not-found branch was hard-coded EN
+  // ("Breeder — Pawls") and the named branch used an EN-only generator.
   head: ({ loaderData }) => {
     const d = loaderData as { breeder: { name: string; breed_specialty: string } | null };
     if (d?.breeder) {
-      return seoHead(seoBreeder(d.breeder.name, d.breeder.breed_specialty));
+      const vars = { name: d.breeder.name, specialty: d.breeder.breed_specialty };
+      return seoHead({
+        title: seoFill(t("breederDetail.seoNamedTitle", DEFAULT_LANG), vars),
+        description: seoFill(t("breederDetail.seoNamedDesc", DEFAULT_LANG), vars),
+        path: `/breed/${encodeURIComponent(d.breeder.name.toLowerCase().replace(/\s+/g, "-"))}`,
+      });
     }
-    return seoHead({ title: "Breeder — Pawls", description: "View breeder details on Pawls. Demo listing — breeder verification coming soon.", path: "/breed" });
+    return seoHead({
+      title: t("breederDetail.seoTitle", DEFAULT_LANG),
+      description: t("breederDetail.seoDesc", DEFAULT_LANG),
+      path: "/breed",
+    });
   },
   loader: ({ params }) => getBreederDetail({ data: { breederId: Number(params.breederId) } }),
   component: BreederDetailPage,

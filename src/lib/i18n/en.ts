@@ -932,4 +932,32 @@ export const en: Record<string, string> = {
   "create.temperamentPlaceholder": "e.g. friendly, playful, shy, calm",
   "create.bioPlaceholder": "Tell other owners a bit about your dog…",
   "create.emailPlaceholder": "e.g. sophie@email.com",
+  // ── SEO titles/meta (P2 item 5, 2026-10-24) ────────────────────────────────
+  // EN counterparts of the FR-first titles added for the routes that used to
+  // render EN-only titles from the static `SEO` map.
+  "root.title": "Pawls — The all-in-one app for dog people",
+  "root.seoDesc":
+    "Pawls is the all-in-one platform for dog people: playmates, services, breeding, rescue and community — all in one place.",
+  "mydogs.seoDesc": "Manage your dog profiles on Pawls: edit details, add a photo, set visibility.",
+  "matches.seoDesc": "Your dog matches on Pawls. Chat with other owners and arrange meetups.",
+  "msg.seoDesc": "Your private conversations with your Pawls matches.",
+  "msg.threadTitle": "Conversation — Pawls",
+  "msg.threadDesc": "Private conversation with a Pawls match.",
+  "viral.title": "Trending Dogs — Pawls",
+  "viral.seoDesc": "The most popular dog profiles on Pawls.",
+  "invite.seoTitle": "Invite friends — Pawls",
+  "invite.seoDesc":
+    "Invite your dog-loving friends to Pawls. Share your referral link and help the community grow.",
+  "breederDetail.seoTitle": "Breeder — Pawls",
+  "breederDetail.seoDesc":
+    "View breeder details on Pawls. Demo listing — breeder verification coming soon.",
+  "breederDetail.seoNamedTitle": "{name} — {specialty} Breeder | Pawls",
+  "breederDetail.seoNamedDesc":
+    "{name} — {specialty} breeder profile on Pawls. Demo listing — breeder verification is coming soon.",
+  "rescueDetail.seoTitle": "Rescue Dog — Pawls",
+  "rescueDetail.seoDesc":
+    "View rescue dog details on Pawls. Demo listing — live shelter partnerships are coming soon.",
+  "rescueDetail.seoNamedTitle": "Adopt {name} — {breed} for Adoption | Pawls",
+  "rescueDetail.seoNamedDesc":
+    "{name} is a {breed} looking for a forever home. Demo listing — live shelter partnerships are coming soon.",
 };

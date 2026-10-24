@@ -2,7 +2,8 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { getTrendingDogs } from "../db/schema";
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG } from "../lib/i18n";
 import { EmptyState } from "../lib/empty-state";
 
 type TrendingDog = {
@@ -37,7 +38,13 @@ function rankBadge(index: number) {
 }
 
 export const Route = createFileRoute("/viral")({
-  head: () => seoHead(SEO.viral),
+  // FR-first SSR title/meta (P2 item 5).
+  head: () =>
+    seoHead({
+      title: t("viral.title", DEFAULT_LANG),
+      description: t("viral.seoDesc", DEFAULT_LANG),
+      path: "/viral",
+    }),
   loader: async () => {
     try {
       return { dogs: await getTrendingDogs(), error: "" };

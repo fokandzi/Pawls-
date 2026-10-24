@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import appCss from "~/styles/app.css?url";
 import { createServerFn } from "@tanstack/react-start";
 import { getSessionUser } from "../lib/auth/session";
-import { normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { normalizeLang, t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 /** Resolve the ACTUAL language for the SSR <html lang> — from the signed-in
  * user's preferred_language (users.preferred_language) when available, else
@@ -31,22 +31,22 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Pawls — The all-in-one app for dog people" },
-      { name: "description", content: "Pawls is the all-in-one platform for dog people. Find playmates, book walkers & groomers, connect with ethical breeders, rescue dogs, and join local dog communities." },
+      { title: t("root.title", DEFAULT_LANG) },
+      { name: "description", content: t("root.seoDesc", DEFAULT_LANG) },
       { name: "theme-color", content: "#C95D43" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Pawls" },
       // Open Graph defaults (overridden by per-page head)
-      { property: "og:title", content: "Pawls — The all-in-one app for dog people" },
-      { property: "og:description", content: "Find playmates, book services, breed responsibly, rescue dogs — all in one app." },
+      { property: "og:title", content: t("root.title", DEFAULT_LANG) },
+      { property: "og:description", content: t("root.seoDesc", DEFAULT_LANG) },
       { property: "og:image", content: "https://pawls.club/logo.png" },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "Pawls" },
       // Twitter Card defaults
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Pawls — The all-in-one app for dog people" },
-      { name: "twitter:description", content: "Find playmates, book services, breed responsibly, rescue dogs — all in one app." },
+      { name: "twitter:title", content: t("root.title", DEFAULT_LANG) },
+      { name: "twitter:description", content: t("root.seoDesc", DEFAULT_LANG) },
       { name: "twitter:image", content: "https://pawls.club/logo.png" },
     ],
     links: [

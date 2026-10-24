@@ -964,4 +964,38 @@ export const fr: Record<string, string> = {
   "create.temperamentPlaceholder": "ex. amical, joueur, timide, calme",
   "create.bioPlaceholder": "Présentez votre chien aux autres propriétaires…",
   "create.emailPlaceholder": "ex. camille@exemple.com",
+  // ── SEO titles/meta (P2 item 5, 2026-10-24) ────────────────────────────────
+  // FR-first SSR <title>/<meta> for routes that were still serving EN-only
+  // titles. Titles read "… — Pawls" like the sibling routes already shipped
+  // (match.title, matches.title, mydogs.title, msg.title). Descriptions stay
+  // truthful: demo listings are labelled as demo, nothing claims a live
+  // marketplace where there is none.
+  "root.title": "Pawls — L'appli tout-en-un pour les amoureux des chiens",
+  "root.seoDesc":
+    "Pawls est la plateforme tout-en-un pour les amoureux des chiens : compagnons de jeu, services, élevage, adoption et communauté — au même endroit.",
+  "mydogs.seoDesc":
+    "Gérez les profils de vos chiens sur Pawls : modifier les informations, ajouter une photo, régler la visibilité.",
+  "matches.seoDesc":
+    "Vos matchs de chiens sur Pawls. Discutez avec les autres propriétaires et organisez des rencontres.",
+  "msg.seoDesc":
+    "Vos conversations privées avec vos matchs sur Pawls. Échangez en 1 à 1 avec les propriétaires que vous avez matchés.",
+  "msg.threadTitle": "Conversation — Pawls",
+  "msg.threadDesc": "Conversation privée avec un match Pawls.",
+  "viral.title": "Chiens tendance — Pawls",
+  "viral.seoDesc": "Les profils de chiens les plus populaires sur Pawls.",
+  "invite.seoTitle": "Inviter des amis — Pawls",
+  "invite.seoDesc":
+    "Invitez vos amis amoureux des chiens sur Pawls. Partagez votre lien de parrainage et faites grandir la communauté.",
+  "breederDetail.seoTitle": "Éleveur — Pawls",
+  "breederDetail.seoDesc":
+    "Fiche d'un éleveur sur Pawls. Annonce de démonstration — la vérification des éleveurs arrive bientôt.",
+  "breederDetail.seoNamedTitle": "{name} — Éleveur de {specialty} | Pawls",
+  "breederDetail.seoNamedDesc":
+    "{name}, éleveur de {specialty} sur Pawls. Annonce de démonstration — la vérification des éleveurs arrive bientôt.",
+  "rescueDetail.seoTitle": "Chien à adopter — Pawls",
+  "rescueDetail.seoDesc":
+    "Fiche d'un chien à adopter sur Pawls. Annonce de démonstration — les partenariats avec les refuges arrivent bientôt.",
+  "rescueDetail.seoNamedTitle": "Adopter {name} — {breed} | Pawls",
+  "rescueDetail.seoNamedDesc":
+    "{name} est un {breed} qui cherche une famille pour la vie. Annonce de démonstration — les partenariats avec les refuges arrivent bientôt.",
 };

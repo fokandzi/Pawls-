@@ -1,8 +1,8 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { seoHead, SEO } from "../lib/seo";
-import { t, normalizeLang, type Lang } from "../lib/i18n";
+import { seoHead } from "../lib/seo";
+import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 
 type ConversationRow = {
@@ -22,7 +22,14 @@ type ConversationRow = {
 };
 
 export const Route = createFileRoute("/match/conversations")({
-  head: () => seoHead(SEO["match/conversations"]),
+  // FR-first SSR title/meta (P2 item 5) — noIndex is preserved: private page.
+  head: () =>
+    seoHead({
+      title: t("msg.title", DEFAULT_LANG),
+      description: t("msg.seoDesc", DEFAULT_LANG),
+      path: "/match/conversations",
+      noIndex: true,
+    }),
   component: ConversationsPage,
 });
 

@@ -3,16 +3,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getReferralCode, getReferralLink, getReferredBy, hasClaimedReward } from "../lib/referral";
 import { getReferralCount } from "../db/schema";
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG } from "../lib/i18n";
 import { trackEvent } from "../lib/analytics"
 
 export const Route = createFileRoute("/invite")({
-  head: () => seoHead({
-    title: "Invite Friends to Pawls | Pawls",
-    description:
-      "Invite your dog-loving friends to Pawls. Share your unique referral link and help the Pawls community grow.",
-    path: "/invite",
-  }),
+  // FR-first SSR title/meta (P2 item 5).
+  head: () =>
+    seoHead({
+      title: t("invite.seoTitle", DEFAULT_LANG),
+      description: t("invite.seoDesc", DEFAULT_LANG),
+      path: "/invite",
+    }),
   component: InvitePage,
 });
 

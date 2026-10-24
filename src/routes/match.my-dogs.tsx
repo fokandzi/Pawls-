@@ -2,7 +2,7 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { seoHead } from "../lib/seo";
-import { t, normalizeLang, type Lang } from "../lib/i18n";
+import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 import { DogPhoto } from "../lib/dog-photo-ui";
 
@@ -17,7 +17,14 @@ type MyDog = {
 };
 
 export const Route = createFileRoute("/match/my-dogs")({
-  head: () => seoHead({ title: "My dogs — Pawls", description: "Manage your dog profiles on Pawls.", path: "/match/my-dogs" }),
+  // FR-first SSR title/meta (P2 item 5): t("mydogs.title") already existed and
+  // was only used inside the page — the <title> was hard-coded EN.
+  head: () =>
+    seoHead({
+      title: t("mydogs.title", DEFAULT_LANG),
+      description: t("mydogs.seoDesc", DEFAULT_LANG),
+      path: "/match/my-dogs",
+    }),
   component: MyDogsPage,
 });
 

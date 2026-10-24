@@ -1,8 +1,8 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { seoHead, SEO } from "../lib/seo";
-import { t, normalizeLang, type Lang } from "../lib/i18n";
+import { seoHead } from "../lib/seo";
+import { t, normalizeLang, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 import { ReportModal, safetyPost } from "../lib/safety-ui";
 
@@ -33,7 +33,14 @@ type ConversationMeta = {
 type RelStatus = { blockedByMe: boolean; blockedMe: boolean; matchState: "active" | "unmatched" | "none" };
 
 export const Route = createFileRoute("/match/conversations_/$id")({
-  head: () => seoHead(SEO["match/conversations/$id"]),
+  // FR-first SSR title/meta (P2 item 5) — private thread, noIndex preserved.
+  head: () =>
+    seoHead({
+      title: t("msg.threadTitle", DEFAULT_LANG),
+      description: t("msg.threadDesc", DEFAULT_LANG),
+      path: "/match/conversations",
+      noIndex: true,
+    }),
   component: ConversationThreadPage,
 });
 

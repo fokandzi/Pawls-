@@ -66,15 +66,33 @@ const getDogDetail = createServerFn({ method: "GET" })
 
 // ── Route definition ─────────────────────────────────────────────────────────
 
-import { seoHead, seoRescueDog } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+import { t, DEFAULT_LANG } from "../lib/i18n";
+
+/** Minimal {placeholder} interpolation for the SEO templates (same shape the
+ * /book/$providerId detail route uses). */
+function seoFill(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? "");
+}
 
 export const Route = createFileRoute("/rescue/$dogId")({
+  // FR-first SSR title/meta (P2 item 5): the not-found branch was hard-coded EN
+  // ("Rescue Dog — Pawls") and the named branch used an EN-only generator.
   head: ({ loaderData }) => {
     const d = loaderData as { dog: { name: string; breed: string } | null };
     if (d?.dog) {
-      return seoHead(seoRescueDog(d.dog.name, d.dog.breed));
+      const vars = { name: d.dog.name, breed: d.dog.breed };
+      return seoHead({
+        title: seoFill(t("rescueDetail.seoNamedTitle", DEFAULT_LANG), vars),
+        description: seoFill(t("rescueDetail.seoNamedDesc", DEFAULT_LANG), vars),
+        path: `/rescue/${encodeURIComponent(d.dog.name.toLowerCase())}`,
+      });
     }
-    return seoHead({ title: "Rescue Dog — Pawls", description: "View rescue dog details on Pawls.", path: "/rescue" });
+    return seoHead({
+      title: t("rescueDetail.seoTitle", DEFAULT_LANG),
+      description: t("rescueDetail.seoDesc", DEFAULT_LANG),
+      path: "/rescue",
+    });
   },
   loader: ({ params }) => getDogDetail({ data: { dogId: params.dogId } }),
   component: RescueDogDetailPage,
