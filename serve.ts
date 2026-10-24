@@ -20,6 +20,8 @@ import { handleSafetyApi } from "./safety-api-handler.ts";
 import { handleProvidersApi } from "./provider-api-handler.ts";
 import { handleBookingApi } from "./booking-api-handler.ts";
 import { handleWaitlistPost } from "./waitlist-handler.ts";
+import { handleHealthRequest } from "./src/lib/health.ts";
+import { guardPageRequest } from "./src/lib/auth/page-guard.ts";
 
 // Pinned, NOT read from the environment. The published preview URL
 // (<label>.<PUBLIC_SITE_DOMAIN>) is reverse-proxied to 0.0.0.0:3000 inside the
@@ -52,6 +54,21 @@ for (let attempt = 1; ; attempt++) {
       hostname: HOST,
       async fetch(req) {
         const { pathname } = new URL(req.url);
+
+        // GET /health — anonymous, minimal, truthful (batch E seed): DB
+        // reachability + whether photo storage is really configured. Handled
+        // pre-SSR so an uptime probe never pays for a React render.
+        if (pathname === "/health") {
+          return handleHealthRequest(req);
+        }
+
+        // Page-level access guards that must answer with a real status BEFORE
+        // the SSR render: /settings (anon -> 302 /login) and /admin/* (anon ->
+        // 302, non-admin -> 404). See src/lib/auth/page-guard.ts.
+        {
+          const guarded = await guardPageRequest(req);
+          if (guarded) return guarded;
+        }
 
         // Native POST /register — sign-up form posts here. Must be handled
         // before the SSR handler (which would render HTML for it instead).

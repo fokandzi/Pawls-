@@ -43,17 +43,93 @@ const UPLOAD_TIMEOUT_MS = 15_000;
 const OWN_UPLOAD_HOST = /(^|\.)(uploadthing\.com|ufs\.sh|utfs\.io)$/i;
 
 /**
- * Environment variable name note: uploadthing v7 reads `UPLOADTHING_TOKEN`
- * (v6 used `UPLOADTHING_SECRET`). We accept both so an older key keeps working.
+ * Token state — `ok` / `missing` / `malformed` (P0 hardening, audit §A.2).
+ *
+ * An uploadthing **v7** token is `base64(JSON { apiKey, appId, regions[] })`.
+ * Anything else — a v6 `UPLOADTHING_SECRET`, a truncated paste, a random
+ * placeholder — is rejected by the SDK with `INVALID_SERVER_CONFIG` *before a
+ * single HTTP request is made*. Without this check that surfaced as a 502
+ * "try again in a moment" (a lie: retrying a config error can never succeed)
+ * and, on the browser form path, as a silent bounce back to the page.
+ *
+ * Checking the shape here turns it into an explicit 503 "not configured here"
+ * plus one precise server log line, so the next reader knows immediately
+ * whether the variable is absent or present-but-wrong.
  */
-export function dogPhotoToken(): string | null {
-  const token = process.env.UPLOADTHING_TOKEN ?? process.env.UPLOADTHING_SECRET;
-  return token && token.trim() ? token.trim() : null;
+export type DogPhotoTokenState =
+  | { kind: "ok"; token: string }
+  | { kind: "missing"; reason: string }
+  | { kind: "malformed"; reason: string };
+
+/** Decode + shape-check one candidate token value. Never logs the value. */
+export function decodeUploadthingToken(raw: string): DogPhotoTokenState {
+  const token = raw.trim();
+  if (!token) return { kind: "missing", reason: "value is empty" };
+  let decoded: string;
+  try {
+    decoded = Buffer.from(token, "base64").toString("utf8");
+  } catch {
+    return { kind: "malformed", reason: "value is not valid base64" };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decoded);
+  } catch {
+    return {
+      kind: "malformed",
+      reason: "base64 payload is not JSON (a v7 token decodes to {apiKey, appId, regions[]})",
+    };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { kind: "malformed", reason: "decoded token is not a JSON object" };
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.apiKey !== "string" || !obj.apiKey) {
+    return { kind: "malformed", reason: "decoded token has no apiKey" };
+  }
+  if (typeof obj.appId !== "string" || !obj.appId) {
+    return { kind: "malformed", reason: "decoded token has no appId" };
+  }
+  if (!Array.isArray(obj.regions)) {
+    return { kind: "malformed", reason: "decoded token has no regions[]" };
+  }
+  return { kind: "ok", token };
 }
 
-/** True when real object storage is configured. Never faked, never defaulted. */
+/**
+ * Resolve the configured token's state.
+ *
+ * `UPLOADTHING_TOKEN` is the v7 variable. `UPLOADTHING_SECRET` is kept ONLY to
+ * explain the failure: a v6 secret can never work with the v7 SDK, and silently
+ * forwarding it produced a 502 nobody could diagnose. It is reported as
+ * `malformed` with an actionable reason — never used as a token.
+ */
+export function dogPhotoTokenState(): DogPhotoTokenState {
+  const v7 = process.env.UPLOADTHING_TOKEN;
+  if (v7 && v7.trim()) return decodeUploadthingToken(v7);
+  const legacy = process.env.UPLOADTHING_SECRET;
+  if (legacy && legacy.trim()) {
+    return {
+      kind: "malformed",
+      reason:
+        "UPLOADTHING_SECRET is a v6 secret and cannot work with uploadthing v7 — set UPLOADTHING_TOKEN (Uploadthing dashboard → API keys → Token)",
+    };
+  }
+  return { kind: "missing", reason: "UPLOADTHING_TOKEN is not set in this environment" };
+}
+
+/** The usable v7 token, or null when storage is not (correctly) configured. */
+export function dogPhotoToken(): string | null {
+  const state = dogPhotoTokenState();
+  return state.kind === "ok" ? state.token : null;
+}
+
+/**
+ * True when real object storage is configured AND the credential is usable.
+ * Never faked, never defaulted — a malformed token is NOT "configured".
+ */
 export function isDogPhotoUploadConfigured(): boolean {
-  return dogPhotoToken() !== null;
+  return dogPhotoTokenState().kind === "ok";
 }
 
 export interface PhotoFailure {
@@ -151,6 +227,36 @@ function boundedFetch(input: unknown, init?: Record<string, unknown>): Promise<R
 }
 
 /**
+ * Map an Uploadthing SDK error to an honest failure (audit §A.3).
+ *
+ * `INVALID_SERVER_CONFIG` / `MISSING_ENV` mean the credential is wrong, not that
+ * the network hiccuped: the SDK rejects it before any HTTP call, so "try again
+ * in a moment" would be false and endlessly repeated. Those map to **503** with
+ * the plain-language "upload is not enabled here, nothing was saved, your
+ * current photo is unchanged" copy. Everything else stays a 502 "upload failed".
+ */
+export function mapUploadthingError(error: unknown): PhotoFailure {
+  const code = String((error as any)?.code ?? "");
+  const message = String((error as any)?.message ?? "");
+  if (code === "INVALID_SERVER_CONFIG" || code === "MISSING_ENV") {
+    return {
+      ok: false,
+      status: 503,
+      titleKey: "photo.err.notConfiguredTitle",
+      bodyKey: "photo.err.notConfiguredBody",
+      log: `uploadthing ${code} — token rejected before any HTTP request; replace UPLOADTHING_TOKEN with a v7 token from the Uploadthing dashboard`,
+    };
+  }
+  return {
+    ok: false,
+    status: 502,
+    titleKey: "photo.err.uploadFailedTitle",
+    bodyKey: "photo.err.uploadFailedBody",
+    log: `uploadthing error${code ? ` ${code}` : ""}${message ? `: ${message.slice(0, 200)}` : ""}`,
+  };
+}
+
+/**
  * Upload one validated photo to object storage.
  * uploadthing v7 `uploadFiles()` RESOLVES with `{ data: null, error }` instead of
  * throwing, so both the resolved error and a thrown SDK/network error are handled.
@@ -160,33 +266,28 @@ function boundedFetch(input: unknown, init?: Record<string, unknown>): Promise<R
 export async function uploadDogPhoto(
   file: File,
 ): Promise<{ ok: true; url: string } | PhotoFailure> {
-  const token = dogPhotoToken();
-  if (!token) {
-    // Honest degradation: the feature is not switched on here (no real
-    // UPLOADTHING_TOKEN in this environment). Nothing was stored, nothing was
-    // changed — and we say exactly that instead of pretending success.
-    console.error("[dog-photo] upload attempted with no UPLOADTHING_TOKEN configured");
+  const state = dogPhotoTokenState();
+  if (state.kind !== "ok") {
+    // Honest degradation, with the reason spelled out in ONE log line:
+    // "missing" (variable absent) and "malformed" (present but not a v7 token)
+    // are different problems and must not look alike in the logs.
+    console.error(`[dog-photo] storage config ${state.kind}: ${state.reason}`);
     return {
       ok: false,
       status: 503,
       titleKey: "photo.err.notConfiguredTitle",
       bodyKey: "photo.err.notConfiguredBody",
-      log: "UPLOADTHING_TOKEN/UPLOADTHING_SECRET is not set",
+      log: `object storage not configured (${state.kind}): ${state.reason}`,
     };
   }
   try {
     const { UTApi } = await import("uploadthing/server");
-    const utapi = new UTApi({ token, fetch: boundedFetch as unknown as typeof fetch });
+    const utapi = new UTApi({ token: state.token, fetch: boundedFetch as unknown as typeof fetch });
     const res = await utapi.uploadFiles(file);
     if (res?.error) {
-      console.error("[dog-photo] uploadthing returned an error", res.error);
-      return {
-        ok: false,
-        status: 502,
-        titleKey: "photo.err.uploadFailedTitle",
-        bodyKey: "photo.err.uploadFailedBody",
-        log: `uploadthing error: ${JSON.stringify(res.error).slice(0, 300)}`,
-      };
+      const mapped = mapUploadthingError(res.error);
+      console.error(`[dog-photo] upload rejected (${mapped.status}): ${mapped.log}`);
+      return mapped;
     }
     const url = res?.data?.url;
     if (!url) {
@@ -201,14 +302,13 @@ export async function uploadDogPhoto(
     }
     return { ok: true, url };
   } catch (err) {
-    console.error("[dog-photo] upload threw", err);
-    return {
-      ok: false,
-      status: 502,
-      titleKey: "photo.err.uploadFailedTitle",
-      bodyKey: "photo.err.uploadFailedBody",
-      log: `upload threw: ${err instanceof Error ? err.message : String(err)}`,
-    };
+    const mapped = mapUploadthingError(err);
+    console.error(
+      `[dog-photo] upload threw (${mapped.status}): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return mapped;
   }
 }
 

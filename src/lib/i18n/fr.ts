@@ -291,6 +291,8 @@ export const fr: Record<string, string> = {
   "auth.err.invalidCredentialsBody": "Vérifiez vos identifiants, ou réinitialisez votre mot de passe.",
   "auth.err.suspendedTitle": "Compte suspendu",
   "auth.err.suspendedBody": "Ce compte est actuellement suspendu. Écrivez au support Pawls si vous pensez qu'il s'agit d'une erreur.",
+  "auth.err.unverifiedLoginTitle": "Vérifiez votre adresse email",
+  "auth.err.unverifiedLoginBody": "Votre adresse {email} n'est pas encore vérifiée. Cliquez sur le lien de vérification envoyé par email, puis reconnectez-vous. Aucune session n'a été ouverte.",
   "auth.err.loginRequiredTitle": "Connectez-vous",
   "auth.err.loginRequiredBody": "Vous devez être connecté pour effectuer cette action.",
   "auth.err.currentPasswordTitle": "Mot de passe actuel incorrect",
@@ -667,6 +669,8 @@ export const fr: Record<string, string> = {
   "photo.saved": "Photo enregistrée.",
   "photo.removed": "Photo retirée.",
   "photo.failed": "Votre profil a bien été enregistré, mais la photo n'a PAS été téléversée. Vous pouvez réessayer ci-dessous.",
+  "photo.unavailable": "Votre profil a bien été enregistré, mais le téléversement de photos n'est pas encore activé ici : aucune photo n'a été enregistrée. La photo actuelle est inchangée.",
+  "match.unverifiedBanner": "Votre adresse email n'est pas vérifiée — et l'envoi d'emails n'est pas encore configuré ici, donc aucun lien de vérification ne peut être envoyé pour l'instant. Vous pouvez utiliser Pawls normalement.",
   "photo.nav.myDogs": "Mes chiens",
   "photo.nav.create": "Retour au profil de mon chien",
   "photo.err.unauthTitle": "Connectez-vous",
@@ -960,4 +964,38 @@ export const fr: Record<string, string> = {
   "create.temperamentPlaceholder": "ex. amical, joueur, timide, calme",
   "create.bioPlaceholder": "Présentez votre chien aux autres propriétaires…",
   "create.emailPlaceholder": "ex. camille@exemple.com",
+  // ── SEO titles/meta (P2 item 5, 2026-10-24) ────────────────────────────────
+  // FR-first SSR <title>/<meta> for routes that were still serving EN-only
+  // titles. Titles read "… — Pawls" like the sibling routes already shipped
+  // (match.title, matches.title, mydogs.title, msg.title). Descriptions stay
+  // truthful: demo listings are labelled as demo, nothing claims a live
+  // marketplace where there is none.
+  "root.title": "Pawls — L'appli tout-en-un pour les amoureux des chiens",
+  "root.seoDesc":
+    "Pawls est la plateforme tout-en-un pour les amoureux des chiens : compagnons de jeu, services, élevage, adoption et communauté — au même endroit.",
+  "mydogs.seoDesc":
+    "Gérez les profils de vos chiens sur Pawls : modifier les informations, ajouter une photo, régler la visibilité.",
+  "matches.seoDesc":
+    "Vos matchs de chiens sur Pawls. Discutez avec les autres propriétaires et organisez des rencontres.",
+  "msg.seoDesc":
+    "Vos conversations privées avec vos matchs sur Pawls. Échangez en 1 à 1 avec les propriétaires que vous avez matchés.",
+  "msg.threadTitle": "Conversation — Pawls",
+  "msg.threadDesc": "Conversation privée avec un match Pawls.",
+  "viral.title": "Chiens tendance — Pawls",
+  "viral.seoDesc": "Les profils de chiens les plus populaires sur Pawls.",
+  "invite.seoTitle": "Inviter des amis — Pawls",
+  "invite.seoDesc":
+    "Invitez vos amis amoureux des chiens sur Pawls. Partagez votre lien de parrainage et faites grandir la communauté.",
+  "breederDetail.seoTitle": "Éleveur — Pawls",
+  "breederDetail.seoDesc":
+    "Fiche d'un éleveur sur Pawls. Annonce de démonstration — la vérification des éleveurs arrive bientôt.",
+  "breederDetail.seoNamedTitle": "{name} — Éleveur de {specialty} | Pawls",
+  "breederDetail.seoNamedDesc":
+    "{name}, éleveur de {specialty} sur Pawls. Annonce de démonstration — la vérification des éleveurs arrive bientôt.",
+  "rescueDetail.seoTitle": "Chien à adopter — Pawls",
+  "rescueDetail.seoDesc":
+    "Fiche d'un chien à adopter sur Pawls. Annonce de démonstration — les partenariats avec les refuges arrivent bientôt.",
+  "rescueDetail.seoNamedTitle": "Adopter {name} — {breed} | Pawls",
+  "rescueDetail.seoNamedDesc":
+    "{name} est un {breed} qui cherche une famille pour la vie. Annonce de démonstration — les partenariats avec les refuges arrivent bientôt.",
 };

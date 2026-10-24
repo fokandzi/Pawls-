@@ -292,6 +292,8 @@ export const en: Record<string, string> = {
   "auth.err.invalidCredentialsBody": "Check your details, or reset your password.",
   "auth.err.suspendedTitle": "Account suspended",
   "auth.err.suspendedBody": "This account is currently suspended. Contact Pawls support if you believe this is a mistake.",
+  "auth.err.unverifiedLoginTitle": "Verify your email address",
+  "auth.err.unverifiedLoginBody": "Your address {email} is not verified yet. Open the verification link we emailed you, then log in again. No session was opened.",
   "auth.err.loginRequiredTitle": "Please log in",
   "auth.err.loginRequiredBody": "You need to be logged in to do this.",
   "auth.err.currentPasswordTitle": "Current password incorrect",
@@ -638,6 +640,8 @@ export const en: Record<string, string> = {
   "photo.saved": "Photo saved.",
   "photo.removed": "Photo removed.",
   "photo.failed": "Your profile was saved, but the photo was NOT uploaded. You can try again below.",
+  "photo.unavailable": "Your profile was saved, but photo upload is not enabled here yet: no photo was stored. Your current photo is unchanged.",
+  "match.unverifiedBanner": "Your email address is not verified — and outbound email is not configured here yet, so no verification link can be sent right now. You can keep using Pawls normally.",
   "photo.nav.myDogs": "My dogs",
   "photo.nav.create": "Back to my dog's profile",
   "photo.err.unauthTitle": "Log in required",
@@ -928,4 +932,32 @@ export const en: Record<string, string> = {
   "create.temperamentPlaceholder": "e.g. friendly, playful, shy, calm",
   "create.bioPlaceholder": "Tell other owners a bit about your dog…",
   "create.emailPlaceholder": "e.g. sophie@email.com",
+  // ── SEO titles/meta (P2 item 5, 2026-10-24) ────────────────────────────────
+  // EN counterparts of the FR-first titles added for the routes that used to
+  // render EN-only titles from the static `SEO` map.
+  "root.title": "Pawls — The all-in-one app for dog people",
+  "root.seoDesc":
+    "Pawls is the all-in-one platform for dog people: playmates, services, breeding, rescue and community — all in one place.",
+  "mydogs.seoDesc": "Manage your dog profiles on Pawls: edit details, add a photo, set visibility.",
+  "matches.seoDesc": "Your dog matches on Pawls. Chat with other owners and arrange meetups.",
+  "msg.seoDesc": "Your private conversations with your Pawls matches.",
+  "msg.threadTitle": "Conversation — Pawls",
+  "msg.threadDesc": "Private conversation with a Pawls match.",
+  "viral.title": "Trending Dogs — Pawls",
+  "viral.seoDesc": "The most popular dog profiles on Pawls.",
+  "invite.seoTitle": "Invite friends — Pawls",
+  "invite.seoDesc":
+    "Invite your dog-loving friends to Pawls. Share your referral link and help the community grow.",
+  "breederDetail.seoTitle": "Breeder — Pawls",
+  "breederDetail.seoDesc":
+    "View breeder details on Pawls. Demo listing — breeder verification coming soon.",
+  "breederDetail.seoNamedTitle": "{name} — {specialty} Breeder | Pawls",
+  "breederDetail.seoNamedDesc":
+    "{name} — {specialty} breeder profile on Pawls. Demo listing — breeder verification is coming soon.",
+  "rescueDetail.seoTitle": "Rescue Dog — Pawls",
+  "rescueDetail.seoDesc":
+    "View rescue dog details on Pawls. Demo listing — live shelter partnerships are coming soon.",
+  "rescueDetail.seoNamedTitle": "Adopt {name} — {breed} for Adoption | Pawls",
+  "rescueDetail.seoNamedDesc":
+    "{name} is a {breed} looking for a forever home. Demo listing — live shelter partnerships are coming soon.",
 };

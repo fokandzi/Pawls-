@@ -162,6 +162,7 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
   const photo = form.get("photo");
   let photoUrl: string | null = null;
   let photoFailed = false;
+  let photoUnavailable = false;
   if (photo instanceof File && photo.size > 0) {
     const validation = await validateDogPhotoFile(photo);
     if (!validation.ok) {
@@ -183,6 +184,11 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
     } else {
       // Not silent: the user will be told, and the profile keeps no photo URL.
       photoFailed = true;
+      // 503 = object storage is not configured here (missing / malformed token,
+      // or the SDK rejected the credential). That is a different message from a
+      // transient upload failure, so the banner says so instead of inviting a
+      // retry that can never succeed.
+      if (uploaded.status === 503) photoUnavailable = true;
       console.error(`[dog-profile] photo NOT uploaded (${uploaded.status}): ${uploaded.log}`);
     }
   }
@@ -257,7 +263,11 @@ export async function handleMatchCreatePost(request: Request): Promise<Response>
     // lands on the management page with an explicit "photo not uploaded" banner
     // (and the upload control) instead of a page that implies everything worked.
     headers: {
-      Location: photoFailed ? "/match/my-dogs?photo=failed" : "/match",
+      Location: photoUnavailable
+        ? "/match/my-dogs?photo=unavailable"
+        : photoFailed
+          ? "/match/my-dogs?photo=failed"
+          : "/match",
       "Cache-Control": NO_STORE,
     },
   });
