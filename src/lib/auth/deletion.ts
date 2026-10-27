@@ -67,6 +67,13 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
           q.push(tx`UPDATE services SET is_active = false
                     WHERE provider_id IN (SELECT id FROM providers WHERE owner_user_id = ${user.id})`);
         }
+        // Booking mail went to the LISTING address, which may differ from the
+        // account email; anonymise it before the address is cleared below (an
+        // address that is also another account's login is left alone).
+        q.push(tx`UPDATE mail_log SET "to" = 'deleted@example.invalid', body = '[removed: account deleted]'
+                  WHERE lower("to") IN (SELECT lower(email) FROM providers
+                                        WHERE owner_user_id = ${user.id} AND email IS NOT NULL)
+                    AND lower("to") NOT IN (SELECT lower(email) FROM users WHERE id <> ${user.id})`);
         q.push(tx`UPDATE providers
                   SET email = NULL, phone = NULL, website = NULL, image_url = NULL, description = '',
                       approval_status = CASE WHEN approval_status = 'rejected' THEN 'rejected' ELSE 'suspended' END

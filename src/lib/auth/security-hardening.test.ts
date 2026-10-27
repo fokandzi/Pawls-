@@ -307,6 +307,8 @@ describe("account deletion", () => {
     await q`INSERT INTO bookings (provider_id, customer_name, customer_email, customer_user_id, booking_date, start_time, status)
             VALUES (${pid}, 'Someone Else', 'someone@hermetic.example', ${customer}, CURRENT_DATE, '11:00', 'pending_payment')`;
     await mailer.sendMail({ to: ownerEmail, subject: "hello", html: "<p>x</p>", text: "x" });
+    await mailer.sendMail({ to: "victim@biz.example", subject: "booking", html: "<p>b</p>", text: "b" });
+    await mailer.sendMail({ to: "bystander@biz.example", subject: "booking", html: "<p>b</p>", text: "b" });
 
     const listedBefore = (await q.query(PUBLIC_LISTING)).map((r) => Number(r.id));
     expect(listedBefore).toContain(pid);
@@ -328,6 +330,8 @@ describe("account deletion", () => {
     expect(theirs.customer_name).toBe("Someone Else");
 
     expect(await q`SELECT 1 FROM mail_log WHERE lower("to") = lower(${ownerEmail})`).toHaveLength(0);
+    expect(await q`SELECT 1 FROM mail_log WHERE "to" = 'victim@biz.example'`).toHaveLength(0);
+    expect(await q`SELECT 1 FROM mail_log WHERE "to" = 'bystander@biz.example'`).toHaveLength(1);
 
     const [o] = await q`SELECT email, phone, approval_status FROM providers WHERE id = ${otherPid}`;
     expect(o).toEqual({ email: "bystander@biz.example", phone: "+33 6 00 00 00 00", approval_status: "approved" });
