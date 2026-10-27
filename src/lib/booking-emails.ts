@@ -126,6 +126,11 @@ async function providerContact(providerId: number): Promise<{ email: string | nu
     `) as unknown as { email: string | null; owner_user_id: number | null; name: string | null }[];
     const row = rows?.[0];
     if (!row) return { email: null, ownerUserId: null, name: null };
+    // An ownerless listing belongs to a deleted (or never-bound) account: no
+    // stored address may be mailed on its behalf.
+    if (row.owner_user_id === null || row.owner_user_id === undefined) {
+      return { email: null, ownerUserId: null, name: row.name ? String(row.name) : null };
+    }
     let email = row.email ? String(row.email) : null;
     // Fall back to the owning account's address when the listing has none.
     if (!email && row.owner_user_id) {
