@@ -1,0 +1,643 @@
+From e93cc3581c25a4ecc03160c89f002aadac6b4ee8 Mon Sep 17 00:00:00 2001
+From: Sandro Guilliety <188060053+fokandzi@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 00:09:11 +0100
+Subject: [PATCH 3/5] fix(auth): redact email-token links, atomic single-use
+ tokens, wrap legacy SHA-256 passwords
+
+Email tokens
+- mail_log.body (and test-mode console output) stored the raw ?token= of every
+  verify/reset link; a verify link signs its holder in. Bodies are now stored
+  redacted; raw links only on a dev machine with PAWLS_DEV_MAIL_LINKS=1
+- consume is one conditional UPDATE (matching hash + kind + unused + unexpired)
+- a new reset link expires older unused ones; consuming expires siblings
+- purgeExpiredEmailTokens() + scripts/security/purge-expired-email-tokens.ts
+- migration 011: redact stored links, expire every live token, cleanup index
+
+Legacy passwords
+- sha256-scrypt$ format = scrypt(sha256hex(pw)); wraps a bare digest without
+  the password (scripts/security/wrap-legacy-password-hashes.ts, dry-run first)
+- login re-hashes legacy/wrapped/weak-param rows (compare-and-swap)
+
+Login: per-account limit across rotating IPs.
+scripts/security/readonly-security-audit.ts: counts only, read-only txn.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../security/purge-expired-email-tokens.ts    | 16 ++++
+ scripts/security/readonly-security-audit.ts   | 43 +++++++++
+ .../security/wrap-legacy-password-hashes.ts   | 16 ++++
+ src/auth-handler.ts                           | 87 +++++++-----------
+ src/db/migrations/011_security_hardening.sql  | 30 ++++++
+ src/lib/auth/email-tokens.ts                  | 82 +++++++++++++++++
+ src/lib/auth/hash.ts                          | 91 +++++++++++++------
+ src/lib/auth/legacy-passwords.ts              | 40 ++++++++
+ src/lib/auth/mailer.ts                        | 24 ++++-
+ 9 files changed, 346 insertions(+), 83 deletions(-)
+ create mode 100644 scripts/security/purge-expired-email-tokens.ts
+ create mode 100644 scripts/security/readonly-security-audit.ts
+ create mode 100644 scripts/security/wrap-legacy-password-hashes.ts
+ create mode 100644 src/db/migrations/011_security_hardening.sql
+ create mode 100644 src/lib/auth/email-tokens.ts
+ create mode 100644 src/lib/auth/legacy-passwords.ts
+
+diff --git a/scripts/security/purge-expired-email-tokens.ts b/scripts/security/purge-expired-email-tokens.ts
+new file mode 100644
+index 0000000..b8841e4
+--- /dev/null
++++ b/scripts/security/purge-expired-email-tokens.ts
+@@ -0,0 +1,16 @@
++/**
++ * Delete email tokens that expired or were used more than N days ago
++ * (default 7). Idempotent; prints the deleted count only. Safe to schedule.
++ *
++ *   DATABASE_URL=<explicit url> bun run scripts/security/purge-expired-email-tokens.ts [days]
++ *
++ * Does NOT load .env. Logic + tests: src/lib/auth/email-tokens.ts.
++ */
++import { purgeExpiredEmailTokens } from "../../src/lib/auth/email-tokens";
++
++if (!process.env.DATABASE_URL || !/^postgres(ql)?:\/\//.test(process.env.DATABASE_URL)) {
++  console.error("Refusing: set DATABASE_URL explicitly for the database you intend to change.");
++  process.exit(2);
++}
++const days = Number(process.argv[2] ?? 7);
++console.log(JSON.stringify({ deleted: await purgeExpiredEmailTokens(Number.isFinite(days) ? days : 7) }));
+diff --git a/scripts/security/readonly-security-audit.ts b/scripts/security/readonly-security-audit.ts
+new file mode 100644
+index 0000000..daf93c9
+--- /dev/null
++++ b/scripts/security/readonly-security-audit.ts
+@@ -0,0 +1,43 @@
++/**
++ * Read-only security audit — aggregate COUNTS only, for verifying the
++ * findings in docs/security-hardening/ against a real database before and
++ * after migration 011. Never prints ids, emails, hashes, tokens or bodies.
++ *
++ *   DATABASE_URL=<explicit url> bun run scripts/security/readonly-security-audit.ts
++ *
++ * Does NOT load .env (the target database must be chosen on purpose) and runs
++ * every query inside a READ ONLY transaction.
++ */
++import { neon } from "@neondatabase/serverless";
++
++const url = process.env.DATABASE_URL;
++if (!url || !/^postgres(ql)?:\/\//.test(url)) {
++  console.error("Refusing: set DATABASE_URL explicitly for the database you intend to audit.");
++  process.exit(2);
++}
++const sql = neon(url);
++
++const TOKEN_RE = `'[?&]token=[^&[:space:]"''<>\\[]'`;
++const checks: [string, string][] = [
++  ["users with bare legacy sha256 password_hash", `SELECT COUNT(*)::int AS n FROM users WHERE password_hash ~ '^[0-9a-fA-F]{64}$'`],
++  ["users with scrypt-wrapped legacy hash", `SELECT COUNT(*)::int AS n FROM users WHERE password_hash LIKE 'sha256-scrypt$%'`],
++  ["users with scrypt hash", `SELECT COUNT(*)::int AS n FROM users WHERE password_hash LIKE 'scrypt$%'`],
++  ["mail_log rows holding an unredacted ?token=", `SELECT COUNT(*)::int AS n FROM mail_log WHERE body ~ ${TOKEN_RE}`],
++  ["  ...of which mode='test'", `SELECT COUNT(*)::int AS n FROM mail_log WHERE mode = 'test' AND body ~ ${TOKEN_RE}`],
++  ["  ...of which mode='prod'", `SELECT COUNT(*)::int AS n FROM mail_log WHERE mode = 'prod' AND body ~ ${TOKEN_RE}`],
++  ["email_tokens currently valid (unused, unexpired)", `SELECT COUNT(*)::int AS n FROM email_tokens WHERE used_at IS NULL AND expires_at > NOW()`],
++  ["email_tokens expired or used > 7 days ago (purgeable)", `SELECT COUNT(*)::int AS n FROM email_tokens WHERE expires_at < NOW() - interval '7 days' OR used_at < NOW() - interval '7 days'`],
++  ["non-demo providers with NO owner but contact data", `SELECT COUNT(*)::int AS n FROM providers WHERE is_demo = false AND owner_user_id IS NULL AND (email IS NOT NULL OR phone IS NOT NULL OR website IS NOT NULL)`],
++  ["  ...of which approval_status='approved'", `SELECT COUNT(*)::int AS n FROM providers WHERE is_demo = false AND owner_user_id IS NULL AND approval_status = 'approved' AND (email IS NOT NULL OR phone IS NOT NULL OR website IS NOT NULL)`],
++  ["database roles that can log in", `SELECT COUNT(*)::int AS n FROM pg_roles WHERE rolcanlogin`],
++  ["public tables with row level security enabled", `SELECT COUNT(*)::int AS n FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace WHERE ns.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity`],
++];
++
++const results = await sql.transaction(
++  checks.map(([, q]) => sql.query(q)),
++  { readOnly: true },
++);
++checks.forEach(([label], i) => {
++  const rows = results[i] as unknown as { n: number }[];
++  console.log(`${String(rows?.[0]?.n ?? "?").padStart(6)}  ${label}`);
++});
+diff --git a/scripts/security/wrap-legacy-password-hashes.ts b/scripts/security/wrap-legacy-password-hashes.ts
+new file mode 100644
+index 0000000..23960e7
+--- /dev/null
++++ b/scripts/security/wrap-legacy-password-hashes.ts
+@@ -0,0 +1,16 @@
++/**
++ * Wrap legacy unsalted SHA-256 password rows in scrypt (no password needed).
++ * Dry run by default; --apply writes. Prints counts only.
++ *
++ *   DATABASE_URL=<explicit url> bun run scripts/security/wrap-legacy-password-hashes.ts [--apply]
++ *
++ * Does NOT load .env. Logic + tests: src/lib/auth/legacy-passwords.ts.
++ */
++import { wrapLegacyPasswordHashes } from "../../src/lib/auth/legacy-passwords";
++
++if (!process.env.DATABASE_URL || !/^postgres(ql)?:\/\//.test(process.env.DATABASE_URL)) {
++  console.error("Refusing: set DATABASE_URL explicitly for the database you intend to change.");
++  process.exit(2);
++}
++const report = await wrapLegacyPasswordHashes(process.argv.includes("--apply"));
++console.log(JSON.stringify(report));
+diff --git a/src/auth-handler.ts b/src/auth-handler.ts
+index 5a7d46b..0ae1832 100644
+--- a/src/auth-handler.ts
++++ b/src/auth-handler.ts
+@@ -3,13 +3,13 @@
+ // native form POSTs (no client JS, no seroval). Every response is controlled:
+ // 400 invalid input / 401 bad credentials / 403 forbidden / 404 unknown token
+ // / 429 rate limited / 503 email unavailable. Never an uncontrolled 500.
+-import { randomBytes } from "node:crypto";
+ import { sql } from "./db";
+ import { ensureAuthTables, writeAudit } from "./lib/auth/ensure";
+-import { hashPassword, verifyPassword, isLegacySha256Hash, constantTimeEqual } from "./lib/auth/hash";
++import { hashPassword, verifyPassword, needsRehash, constantTimeEqual } from "./lib/auth/hash";
++import { issueEmailToken, consumeEmailToken } from "./lib/auth/email-tokens";
+ import {
+   createSession, revokeSession, revokeOtherSessions, revokeAllSessions,
+-  getSessionUser, clearSessionCookieHeader, requestIsSecure, sha256Hex,
++  getSessionUser, clearSessionCookieHeader, requestIsSecure,
+ } from "./lib/auth/session";
+ import { rateLimit, clientIp } from "./lib/auth/rate-limit";
+ import { assertSameOrigin } from "./lib/auth/csrf";
+@@ -124,9 +124,7 @@ async function sendVerificationFor(
+   userId: number,
+   email: string,
+ ): Promise<{ sent: boolean; failed: boolean }> {
+-  const token = randomBytes(32).toString("base64url");
+-  await sql()`INSERT INTO email_tokens (user_id, kind, token_hash, expires_at)
+-              VALUES (${userId}, 'verify', ${sha256Hex(token)}, NOW() + interval '24 hours')`;
++  const token = await issueEmailToken(userId, "verify");
+   const mail = await sendMail(verificationEmail(email, token));
+   if (mail.mode === "test") return { sent: false, failed: false };
+   if (!mail.ok) return { sent: false, failed: true };
+@@ -474,6 +472,10 @@ async function handleLogin(request: Request): Promise<Response> {
+   }
+   const rl = await rateLimit("login", `${email}|${clientIp(request)}`);
+   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
++  // Per-account cap across rotating IPs (the email+IP key alone allows one
++  // fresh budget per address an attacker controls).
++  const accountRl = await rateLimit("login-account", email);
++  if (accountRl.limited) return rateLimitPage(request, accountRl.retryAfterSeconds);
+   try {
+     await ensureAuthTables();
+     const rows = await sql()`SELECT id, email, name, password_hash, suspended_at, email_verified_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1`;
+@@ -536,8 +538,12 @@ async function handleLogin(request: Request): Promise<Response> {
+         `[auth] login allowed for unverified user ${user.id}: outbound email is not configured, so no verification could ever be sent`,
+       );
+     }
+-    if (isLegacySha256Hash(user.password_hash)) {
+-      await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${user.id}`;
++    // Legacy SHA-256 (bare or scrypt-wrapped) or weaker scrypt parameters:
++    // re-hash with the current scheme now that the password is known to match.
++    // Compare-and-swap on the old hash so a concurrent reset is never undone.
++    if (needsRehash(user.password_hash)) {
++      await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW()
++                  WHERE id = ${user.id} AND password_hash = ${user.password_hash}`;
+     }
+     const session = await createSession(request, Number(user.id));
+     return redirectResponse("/match", [session.cookieHeader]);
+@@ -564,35 +570,25 @@ async function handleVerifyEmail(request: Request): Promise<Response> {
+   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
+   try {
+     await ensureAuthTables();
+-    const tokenHash = sha256Hex(token);
+-    const rows = await sql()`
+-      SELECT et.id, et.user_id FROM email_tokens et
+-      WHERE et.token_hash = ${tokenHash} AND et.kind = 'verify'
+-        AND et.used_at IS NULL AND et.expires_at > NOW()
+-      LIMIT 1
+-    ` as any;
+-    const tok = rows[0] as any;
+-    if (!tok) {
++    const consumed = await consumeEmailToken(token, "verify");
++    if (!consumed.ok && consumed.reason === "used") {
+       return errorPage(request, {
+-        titleKey: "auth.err.linkInvalidTitle",
+-        bodyKey: "auth.err.linkInvalidBody",
++        titleKey: "auth.err.linkUsedTitle",
++        bodyKey: "auth.err.linkUsedBody",
+         status: 404,
+-        links: VERIFY_LINKS,
++        links: [{ href: "/login", labelKey: "auth.nav.login" }],
+       });
+     }
+-    const marked = await sql()`
+-      UPDATE email_tokens SET used_at = NOW() WHERE id = ${tok.id} AND used_at IS NULL RETURNING id
+-    ` as any;
+-    if (!(marked[0] as any)) {
++    if (!consumed.ok) {
+       return errorPage(request, {
+-        titleKey: "auth.err.linkUsedTitle",
+-        bodyKey: "auth.err.linkUsedBody",
++        titleKey: "auth.err.linkInvalidTitle",
++        bodyKey: "auth.err.linkInvalidBody",
+         status: 404,
+-        links: [{ href: "/login", labelKey: "auth.nav.login" }],
++        links: VERIFY_LINKS,
+       });
+     }
+-    await sql()`UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE id = ${tok.user_id}`;
+-    const session = await createSession(request, Number(tok.user_id));
++    await sql()`UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE id = ${consumed.userId}`;
++    const session = await createSession(request, consumed.userId);
+     return redirectResponse("/match/create?verified=1", [session.cookieHeader]);
+   } catch (err) {
+     console.error("[auth] verify failed", err);
+@@ -629,9 +625,7 @@ async function handlePasswordResetRequest(request: Request): Promise<Response> {
+     const user = rows[0] as any;
+     let delivered = false;
+     if (user) {
+-      const token = randomBytes(32).toString("base64url");
+-      await sql()`INSERT INTO email_tokens (user_id, kind, token_hash, expires_at)
+-                  VALUES (${user.id}, 'reset', ${sha256Hex(token)}, NOW() + interval '1 hour')`;
++      const token = await issueEmailToken(Number(user.id), "reset");
+       const mail = await sendMail(passwordResetEmail(email, token));
+       if (!mail.ok) {
+         return errorPage(request, {
+@@ -713,33 +707,18 @@ async function handlePasswordReset(request: Request): Promise<Response> {
+   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
+   try {
+     await ensureAuthTables();
+-    const rows = await sql()`
+-      SELECT et.id, et.user_id FROM email_tokens et
+-      WHERE et.token_hash = ${sha256Hex(token)} AND et.kind = 'reset'
+-        AND et.used_at IS NULL AND et.expires_at > NOW()
+-      LIMIT 1
+-    ` as any;
+-    const tok = rows[0] as any;
+-    if (!tok) {
++    const consumed = await consumeEmailToken(token, "reset");
++    if (!consumed.ok) {
+       return errorPage(request, {
+-        titleKey: "auth.err.linkInvalidTitle",
+-        bodyKey: "auth.err.linkInvalidBody",
+-        status: 404,
+-        links: RESET_LINKS,
+-      });
+-    }
+-    const marked = await sql()`UPDATE email_tokens SET used_at = NOW() WHERE id = ${tok.id} AND used_at IS NULL RETURNING id` as any;
+-    if (!(marked[0] as any)) {
+-      return errorPage(request, {
+-        titleKey: "auth.err.linkUsedTitle",
+-        bodyKey: "auth.err.linkUsedBody",
++        titleKey: consumed.reason === "used" ? "auth.err.linkUsedTitle" : "auth.err.linkInvalidTitle",
++        bodyKey: consumed.reason === "used" ? "auth.err.linkUsedBody" : "auth.err.linkInvalidBody",
+         status: 404,
+         links: RESET_LINKS,
+       });
+     }
+-    await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${tok.user_id}`;
+-    await revokeAllSessions(Number(tok.user_id));
+-    writeAudit(Number(tok.user_id), "password_reset", {});
++    await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${consumed.userId}`;
++    await revokeAllSessions(consumed.userId);
++    writeAudit(consumed.userId, "password_reset", {});
+     return redirectResponse("/login?reset=1");
+   } catch (err) {
+     console.error("[auth] password reset failed", err);
+diff --git a/src/db/migrations/011_security_hardening.sql b/src/db/migrations/011_security_hardening.sql
+new file mode 100644
+index 0000000..8a07a09
+--- /dev/null
++++ b/src/db/migrations/011_security_hardening.sql
+@@ -0,0 +1,30 @@
++-- Pawls security hardening (parallel Claude branch hardening/claude-parallel-security)
++--
++-- 011 (not 010): 010 is taken by fix/breeder-subscription-cancellation, which
++-- is not merged yet. scripts/migrate.ts tracks versions by FILENAME, so the
++-- gap is harmless and either branch can land first.
++--
++-- 1. mail_log.body held the full outgoing email, including the raw
++--    ?token=... of every verification and password-reset link. A verify link
++--    signs its holder in. Redact every stored token value in place (the code on
++--    this branch stores redacted bodies from now on). Already-redacted values
++--    start with "[" and are not matched again.
++-- 2. Every token whose raw value was ever stored above is treated as exposed:
++--    all currently-valid, unused tokens are expired now. Impact: a user holding
++--    a pending link (verify: 24 h, reset: 1 h) gets "link invalid" and requests
++--    a new one. No account, password or session is changed.
++-- 3. Index for the expired-token cleanup (purgeExpiredEmailTokens).
++--
++-- Idempotent: re-running redacts/expires nothing new.
++-- Rollback: none for 1-2 (the removed values were credentials and must not be
++-- restored). For 3: DROP INDEX IF EXISTS idx_email_tokens_expires_at
++-- Runner note: statements are split on semicolons, so none appears in a literal.
++
++UPDATE mail_log
++SET body = regexp_replace(body, '([?&]token=)[^&[:space:]"''<>\[][^&[:space:]"''<>]*', '\1[redacted]', 'g')
++WHERE body ~ '[?&]token=[^&[:space:]"''<>\[]';
++
++UPDATE email_tokens SET expires_at = NOW()
++WHERE used_at IS NULL AND expires_at > NOW();
++
++CREATE INDEX IF NOT EXISTS idx_email_tokens_expires_at ON email_tokens(expires_at);
+diff --git a/src/lib/auth/email-tokens.ts b/src/lib/auth/email-tokens.ts
+new file mode 100644
+index 0000000..20af385
+--- /dev/null
++++ b/src/lib/auth/email-tokens.ts
+@@ -0,0 +1,82 @@
++/**
++ * Single-use email tokens (verification + password reset).
++ *
++ * Only SHA-256(token) is stored in email_tokens.token_hash; the raw token
++ * exists in the outgoing email and nowhere else (mail_log and console output
++ * carry a redacted body, see redactTokenLinks + mailer.ts).
++ *
++ * Kinds:
++ *   verify — 24 h. Consuming it marks the address verified AND signs the user
++ *            in (auth-handler handleVerifyEmail), so it is a login credential.
++ *   reset  — 1 h. Issuing a new one expires the user's older unused reset
++ *            links, so only the newest email works.
++ * There is no passwordless/magic-link login flow in this codebase.
++ *
++ * consumeEmailToken() is one conditional UPDATE: the token must match, be of
++ * the right kind, be unused AND unexpired in the same statement, so two
++ * concurrent clicks cannot both succeed and an expired token cannot be
++ * consumed between a check and a write.
++ */
++import { randomBytes } from "node:crypto";
++import { sql } from "../../db";
++import { sha256Hex } from "./session";
++
++export type EmailTokenKind = "verify" | "reset";
++
++const TTL: Record<EmailTokenKind, string> = { verify: "24 hours", reset: "1 hour" };
++
++/** Create a token for `userId`, store its hash, and return the raw value for the email. */
++export async function issueEmailToken(userId: number, kind: EmailTokenKind): Promise<string> {
++  const token = randomBytes(32).toString("base64url");
++  if (kind === "reset") {
++    await sql()`UPDATE email_tokens SET expires_at = NOW()
++                WHERE user_id = ${userId} AND kind = 'reset' AND used_at IS NULL AND expires_at > NOW()`;
++  }
++  await sql()`INSERT INTO email_tokens (user_id, kind, token_hash, expires_at)
++              VALUES (${userId}, ${kind}, ${sha256Hex(token)}, NOW() + ${TTL[kind]}::interval)`;
++  return token;
++}
++
++export type ConsumeResult = { ok: true; userId: number } | { ok: false; reason: "invalid" | "used" };
++
++/** Atomically consume a raw token. "used" only when it matched and was already spent. */
++export async function consumeEmailToken(token: string, kind: EmailTokenKind): Promise<ConsumeResult> {
++  const tokenHash = sha256Hex(token);
++  const rows = (await sql()`
++    UPDATE email_tokens SET used_at = NOW()
++    WHERE token_hash = ${tokenHash} AND kind = ${kind}
++      AND used_at IS NULL AND expires_at > NOW()
++    RETURNING user_id
++  `) as unknown as { user_id: number }[];
++  if (rows[0]) {
++    const userId = Number(rows[0].user_id);
++    // Every other outstanding link of the same kind dies with this one.
++    await sql()`UPDATE email_tokens SET expires_at = NOW()
++                WHERE user_id = ${userId} AND kind = ${kind} AND used_at IS NULL AND expires_at > NOW()`;
++    return { ok: true, userId };
++  }
++  const spent = (await sql()`
++    SELECT 1 FROM email_tokens WHERE token_hash = ${tokenHash} AND kind = ${kind} AND used_at IS NOT NULL LIMIT 1
++  `) as unknown as unknown[];
++  return { ok: false, reason: spent.length ? "used" : "invalid" };
++}
++
++/**
++ * Delete tokens that expired or were used more than `retentionDays` ago.
++ * Idempotent: a second run deletes nothing new. Returns the deleted count.
++ */
++export async function purgeExpiredEmailTokens(retentionDays = 7): Promise<number> {
++  const days = Math.max(0, Math.floor(retentionDays));
++  const rows = (await sql()`
++    DELETE FROM email_tokens
++    WHERE expires_at < NOW() - make_interval(days => ${days})
++       OR used_at < NOW() - make_interval(days => ${days})
++    RETURNING id
++  `) as unknown as unknown[];
++  return rows.length;
++}
++
++/** Replace the value of every `token=` query parameter, so a stored or logged email is not a credential. */
++export function redactTokenLinks(text: string): string {
++  return text.replace(/([?&]token=)[^&\s"'<>]+/g, "$1[redacted]");
++}
+diff --git a/src/lib/auth/hash.ts b/src/lib/auth/hash.ts
+index 03f99e6..a42afd8 100644
+--- a/src/lib/auth/hash.ts
++++ b/src/lib/auth/hash.ts
+@@ -5,9 +5,16 @@
+  *   N=16384, r=8, p=1, 16-byte random salt, 64-byte derived key.
+  *
+  * Legacy rows: pre-auth users were stored as unsalted SHA-256 hex (64 chars).
+- * Those are verified via sha256 and transparently upgraded to scrypt on the
+- * next successful login (see verifyAndUpgradePassword). Plaintext is never
+- * stored anywhere.
++ * Those are verified via sha256 and upgraded to scrypt on the next successful
++ * login (auth-handler handleLogin, via needsRehash). Plaintext is never stored
++ * anywhere.
++ *
++ * Wrapped legacy rows: `sha256-scrypt$N$r$p$salt$hash` = scrypt(sha256hex(pw)).
++ * wrapLegacySha256Hash() converts a bare SHA-256 row WITHOUT knowing the
++ * password, so the unsalted digests stop sitting in the database while their
++ * owners have not logged in yet (scripts/security/wrap-legacy-password-hashes.ts).
++ * The owner's existing password keeps working; the next login re-hashes it as
++ * plain scrypt.
+  */
+ import { scrypt as scryptCb, randomBytes, createHash, timingSafeEqual } from "node:crypto";
+ import { promisify } from "node:util";
+@@ -34,15 +41,22 @@ export function isLegacySha256Hash(hash: string | null | undefined): boolean {
+   return !!hash && /^[0-9a-f]{64}$/i.test(hash);
+ }
+ 
+-export async function hashPassword(password: string): Promise<string> {
++const WRAPPED_PREFIX = "sha256-scrypt$";
++
++/** A legacy SHA-256 digest wrapped in scrypt (see wrapLegacySha256Hash). */
++export function isWrappedLegacyHash(hash: string | null | undefined): boolean {
++  return !!hash && hash.startsWith(WRAPPED_PREFIX);
++}
++
++async function scryptEncode(prefix: string, input: string): Promise<string> {
+   const salt = randomBytes(SCRYPT_SALT_BYTES);
+-  const derived = await scrypt(password, salt, SCRYPT_KEYLEN, {
++  const derived = await scrypt(input, salt, SCRYPT_KEYLEN, {
+     N: SCRYPT_N,
+     r: SCRYPT_R,
+     p: SCRYPT_P,
+   });
+   return [
+-    "scrypt",
++    prefix,
+     SCRYPT_N,
+     SCRYPT_R,
+     SCRYPT_P,
+@@ -51,28 +65,53 @@ export async function hashPassword(password: string): Promise<string> {
+   ].join("$");
+ }
+ 
++async function scryptMatches(input: string, stored: string): Promise<boolean> {
++  const parts = stored.split("$");
++  if (parts.length !== 6) return false;
++  const [, nStr, rStr, pStr, saltB64, hashB64] = parts;
++  const n = Number(nStr);
++  const r = Number(rStr);
++  const p = Number(pStr);
++  if (!Number.isFinite(n) || !Number.isFinite(r) || !Number.isFinite(p)) return false;
++  let salt: Buffer;
++  let expected: Buffer;
++  try {
++    salt = Buffer.from(saltB64, "base64url");
++    expected = Buffer.from(hashB64, "base64url");
++  } catch {
++    return false;
++  }
++  if (salt.length === 0 || expected.length === 0) return false;
++  const derived = await scrypt(input, salt, expected.length, { N: n, r, p });
++  return timingSafeEqual(derived, expected);
++}
++
++export async function hashPassword(password: string): Promise<string> {
++  return scryptEncode("scrypt", password);
++}
++
++/**
++ * scrypt-wrap a bare legacy SHA-256 hex digest. Needs no password: the input
++ * is the stored digest itself, which verifyPassword recomputes from the
++ * password at login. Throws on anything that is not a legacy digest.
++ */
++export async function wrapLegacySha256Hash(legacyHex: string): Promise<string> {
++  if (!isLegacySha256Hash(legacyHex)) throw new Error("not a legacy sha256 digest");
++  return scryptEncode(WRAPPED_PREFIX.slice(0, -1), legacyHex.toLowerCase());
++}
++
++/** True when a successful login should replace the stored hash with hashPassword(). */
++export function needsRehash(stored: string | null | undefined): boolean {
++  if (isLegacySha256Hash(stored) || isWrappedLegacyHash(stored)) return true;
++  if (!isScryptHash(stored)) return false;
++  const [, n, r, p] = String(stored).split("$");
++  return Number(n) < SCRYPT_N || Number(r) < SCRYPT_R || Number(p) < SCRYPT_P;
++}
++
+ export async function verifyPassword(password: string, stored: string | null | undefined): Promise<boolean> {
+   if (!stored) return false;
+-  if (isScryptHash(stored)) {
+-    const parts = stored.split("$");
+-    if (parts.length !== 6) return false;
+-    const [, nStr, rStr, pStr, saltB64, hashB64] = parts;
+-    const n = Number(nStr);
+-    const r = Number(rStr);
+-    const p = Number(pStr);
+-    if (!Number.isFinite(n) || !Number.isFinite(r) || !Number.isFinite(p)) return false;
+-    let salt: Buffer;
+-    let expected: Buffer;
+-    try {
+-      salt = Buffer.from(saltB64, "base64url");
+-      expected = Buffer.from(hashB64, "base64url");
+-    } catch {
+-      return false;
+-    }
+-    if (salt.length === 0 || expected.length === 0) return false;
+-    const derived = await scrypt(password, salt, expected.length, { N: n, r, p });
+-    return timingSafeEqual(derived, expected);
+-  }
++  if (isScryptHash(stored)) return scryptMatches(password, stored);
++  if (isWrappedLegacyHash(stored)) return scryptMatches(legacySha256(password), stored);
+   if (isLegacySha256Hash(stored)) {
+     // Legacy unsalted sha256 — verify, then the caller upgrades to scrypt.
+     const digest = createHash("sha256").update(password).digest("hex");
+diff --git a/src/lib/auth/legacy-passwords.ts b/src/lib/auth/legacy-passwords.ts
+new file mode 100644
+index 0000000..d452032
+--- /dev/null
++++ b/src/lib/auth/legacy-passwords.ts
+@@ -0,0 +1,40 @@
++/**
++ * Offline protection for legacy unsalted SHA-256 password rows.
++ *
++ * Login already upgrades a legacy row to scrypt once its owner signs in, but
++ * dormant accounts keep a fast, unsalted digest in the database indefinitely.
++ * wrapLegacyPasswordHashes() replaces each one with scrypt(sha256hex) — no
++ * password needed, no cracking, the owner's password keeps working — using a
++ * compare-and-swap UPDATE so a concurrent login upgrade is never overwritten.
++ *
++ * Reports counts only: never ids, emails or hash material.
++ */
++import { sql } from "../../db";
++import { isLegacySha256Hash, wrapLegacySha256Hash } from "./hash";
++
++export interface WrapReport {
++  legacyFound: number;
++  wrapped: number;
++  skippedConcurrent: number;
++  applied: boolean;
++}
++
++export async function wrapLegacyPasswordHashes(apply: boolean): Promise<WrapReport> {
++  const rows = (await sql()`
++    SELECT id, password_hash FROM users WHERE password_hash ~ '^[0-9a-fA-F]{64}$'
++  `) as unknown as { id: number; password_hash: string }[];
++  const legacy = rows.filter((r) => isLegacySha256Hash(r.password_hash));
++  const report: WrapReport = { legacyFound: legacy.length, wrapped: 0, skippedConcurrent: 0, applied: apply };
++  if (!apply) return report;
++  for (const row of legacy) {
++    const wrapped = await wrapLegacySha256Hash(row.password_hash);
++    const updated = (await sql()`
++      UPDATE users SET password_hash = ${wrapped}, updated_at = NOW()
++      WHERE id = ${row.id} AND password_hash = ${row.password_hash}
++      RETURNING id
++    `) as unknown as unknown[];
++    if (updated.length) report.wrapped++;
++    else report.skippedConcurrent++;
++  }
++  return report;
++}
+diff --git a/src/lib/auth/mailer.ts b/src/lib/auth/mailer.ts
+index 848f741..b26ce8d 100644
+--- a/src/lib/auth/mailer.ts
++++ b/src/lib/auth/mailer.ts
+@@ -21,6 +21,7 @@
+  * (prod failure) as a controlled 503.
+  */
+ import { sql } from "../../db";
++import { redactTokenLinks } from "./email-tokens";
+ 
+ const RESEND_URL = "https://api.resend.com/emails";
+ const DEFAULT_FROM = "Pawls <no-reply@pawls.club>";
+@@ -83,13 +84,28 @@ async function recordMail(entry: MailLogEntry): Promise<void> {
+   }
+ }
+ 
++/**
++ * Raw verify/reset links may be printed to the console only on a developer's
++ * own machine (opt-in, never on Vercel, never with NODE_ENV=production). Every
++ * other log line and every mail_log row carries the redacted body: a stored or
++ * logged link is a working login/reset credential.
++ */
++function devRawLinksAllowed(): boolean {
++  return (
++    process.env.PAWLS_DEV_MAIL_LINKS === "1" &&
++    process.env.NODE_ENV !== "production" &&
++    !process.env.VERCEL_ENV
++  );
++}
++
+ export async function sendMail(message: MailMessage): Promise<MailResult> {
+   const mode = mailMode();
+   if (mode === "test") {
+-    const body = `TO: ${message.to}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;
++    const raw = `TO: ${message.to}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;
++    const body = redactTokenLinks(raw);
+     // Console log must make the test nature unmistakable.
+     console.log(
+-      `[auth-mail][TEST MODE — NOT SENT] to=${message.to} subject="${message.subject}"\n${body}`,
++      `[auth-mail][TEST MODE — NOT SENT] to=${message.to} subject="${message.subject}"\n${devRawLinksAllowed() ? raw : body}`,
+     );
+     await recordMail({
+       to: message.to,
+@@ -105,7 +121,9 @@ export async function sendMail(message: MailMessage): Promise<MailResult> {
+   // PROD mode: actually send via Resend.
+   const apiKey = process.env.RESEND_API_KEY;
+   const from = mailFrom();
+-  const body = `TO: ${message.to}\nFROM: ${from}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;
++  const body = redactTokenLinks(
++    `TO: ${message.to}\nFROM: ${from}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`,
++  );
+   try {
+     const res = await fetch(RESEND_URL, {
+       method: "POST",
+-- 
+2.37.1 (Apple Git-137.1)
+

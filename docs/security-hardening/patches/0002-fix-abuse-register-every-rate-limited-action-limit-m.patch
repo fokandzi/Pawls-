@@ -1,0 +1,179 @@
+From bd52064409c29eaadb7a209824adc42a817bc0bb Mon Sep 17 00:00:00 2001
+From: Sandro Guilliety <188060053+fokandzi@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 00:09:11 +0100
+Subject: [PATCH 2/5] fix(abuse): register every rate-limited action; limit
+ messaging and bookings
+
+- block/unblock/unmatch ran at the silent 5/hour default (handler documented
+  10/hour) and unblock shared the unmatch bucket: each now 10/hour per user
+- report registered explicitly (5/hour, unchanged)
+- new: message-send 60/10 min, conversation-start 20/hour, booking-create
+  10/hour per user (429 + Retry-After; booking keeps its HTML redirect path)
+- new: login-account 20/15 min per email (used by the next commit)
+CSRF and authorization order unchanged: limits run after both.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ booking-api-handler.ts     | 11 +++++++++++
+ match-api-handler.ts       | 11 +++++++++++
+ safety-api-handler.ts      |  3 ++-
+ src/lib/auth/rate-limit.ts | 34 ++++++++++++++++++++++++++++++++--
+ 4 files changed, 56 insertions(+), 3 deletions(-)
+
+diff --git a/booking-api-handler.ts b/booking-api-handler.ts
+index 66bc164..323c5f7 100644
+--- a/booking-api-handler.ts
++++ b/booking-api-handler.ts
+@@ -30,6 +30,7 @@
+  */
+ import { requireUser, getAuthUser } from "./src/lib/auth/authz";
+ import { assertSameOrigin } from "./src/lib/auth/csrf";
++import { rateLimit } from "./src/lib/auth/rate-limit";
+ import {
+   availabilityView,
+   bookingForActor,
+@@ -201,6 +202,16 @@ export async function handleBookingApi(request: Request): Promise<Response> {
+   if (pathname === "/api/bookings" && method === "POST") {
+     const auth = await requireUser(request);
+     if (!auth.ok) return json({ ok: false, error: auth.code, message: auth.message }, auth.status);
++    const rl = await rateLimit("booking-create", `u${auth.user.id}`);
++    if (rl.limited) {
++      return coreError(request, {
++        ok: false,
++        status: 429,
++        code: "RATE_LIMITED",
++        message: "Too many booking requests — please try again later.",
++        messageFr: "Trop de demandes de réservation — réessayez plus tard.",
++      }, "customer");
++    }
+     const body = await readBody(request);
+     const created = await createBookingForActor(
+       { userId: auth.user.id, email: auth.user.email, name: auth.user.name },
+diff --git a/match-api-handler.ts b/match-api-handler.ts
+index e44c89e..1352895 100644
+--- a/match-api-handler.ts
++++ b/match-api-handler.ts
+@@ -20,6 +20,7 @@
+  */
+ import { getSessionUser } from "./src/lib/auth/session";
+ import { assertSameOrigin } from "./src/lib/auth/csrf";
++import { rateLimit } from "./src/lib/auth/rate-limit";
+ import { sql } from "./src/db";
+ import {
+   discoveryCandidates,
+@@ -52,6 +53,12 @@ function badJson(message: string, status = 400): Response {
+   return json({ ok: false, error: message }, status);
+ }
+ 
++function rateLimited(retryAfterSeconds: number): Response {
++  const res = json({ ok: false, error: "RATE_LIMITED", message: "Too many requests — please try again later." }, 429);
++  res.headers.set("Retry-After", String(retryAfterSeconds));
++  return res;
++}
++
+ /** Read a JSON or form-encoded body into a plain object. */
+ async function readBody(request: Request): Promise<Record<string, unknown>> {
+   const ct = (request.headers.get("content-type") ?? "").toLowerCase();
+@@ -264,6 +271,8 @@ export async function handleMatchApi(request: Request): Promise<Response> {
+       const csrf = assertSameOrigin(request);
+       if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+       if (!sessionUser) return json({ ok: false, error: "UNAUTHENTICATED", message: "Please log in to continue." }, 401);
++      const startLimit = await rateLimit("conversation-start", `u${sessionUser.id}`);
++      if (startLimit.limited) return rateLimited(startLimit.retryAfterSeconds);
+       const body = await readBody(request);
+       const otherUserId = num(body.otherUserId ?? body.userId);
+       if (otherUserId === null) return badJson("otherUserId is required");
+@@ -305,6 +314,8 @@ export async function handleMatchApi(request: Request): Promise<Response> {
+         if (msgMatch && request.method === "POST") {
+           const csrf = assertSameOrigin(request);
+           if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
++          const sendLimit = await rateLimit("message-send", `u${sessionUser.id}`);
++          if (sendLimit.limited) return rateLimited(sendLimit.retryAfterSeconds);
+           const body = await readBody(request);
+           const result = await sendMessage(sessionUser.id, conversationId, body.body, body.senderProfileId);
+           if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+diff --git a/safety-api-handler.ts b/safety-api-handler.ts
+index b9193f7..c78d38f 100644
+--- a/safety-api-handler.ts
++++ b/safety-api-handler.ts
+@@ -208,7 +208,8 @@ export async function handleSafetyApi(request: Request): Promise<Response> {
+     if (request.method !== "POST") return badJson("POST required", 405);
+     const csrf = assertSameOrigin(request);
+     if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+-    const rl = await rateLimit(pathname === "/api/safety/block" ? "block" : "unmatch", `u${session.id}`);
++    // One bucket per action (block / unblock / unmatch), each 10/hour per user.
++    const rl = await rateLimit(pathname.slice("/api/safety/".length), `u${session.id}`);
+     if (rl.limited) {
+       return json({ ok: false, error: "RATE_LIMITED", message: "Too many requests — please try again later." }, 429);
+     }
+diff --git a/src/lib/auth/rate-limit.ts b/src/lib/auth/rate-limit.ts
+index 1974363..ece6e71 100644
+--- a/src/lib/auth/rate-limit.ts
++++ b/src/lib/auth/rate-limit.ts
+@@ -8,6 +8,20 @@
+  *   reset-request:        3 / 1 hour per email           ('reset-request')
+  *   resend-verification:  5 / 1 hour per IP              ('resend-verification')
+  *   provider-register:    5 / 1 hour per IP              ('provider-register')
++ *   login-account:        20 / 15 min per email          ('login-account')
++ *   report:               5 / 1 hour per user            ('report')
++ *   block / unblock / unmatch: 10 / 1 hour per user, one bucket each
++ *   conversation-start:   20 / 1 hour per user           ('conversation-start')
++ *   message-send:         60 / 10 min per user           ('message-send')
++ *   booking-create:       10 / 1 hour per user           ('booking-create')
++ *
++ * Every action a caller uses MUST be listed below: an unlisted action silently
++ * falls back to 5/hour, which is how block/unmatch ran at 5/hour while
++ * safety-api-handler documented 10/hour.
++ *
++ * 'login-account' caps guesses against ONE account across rotating IPs (the
++ * email+IP key alone does not); the cost is that a flood can make that
++ * account's logins wait out the 15-minute window.
+  *
+  * Exceeded calls return { limited: true, retryAfterSeconds } so callers can
+  * respond 429 with a Retry-After header. Old windows are cleaned up
+@@ -21,24 +35,40 @@ export interface RateLimitResult {
+   count: number;
+ }
+ 
+-const WINDOWS: Record<string, number> = {
++export const WINDOWS: Record<string, number> = {
+   login: 15 * 60,
++  "login-account": 15 * 60,
+   register: 60 * 60,
+   "verify-token": 60 * 60,
+   "reset-token": 60 * 60,
+   "reset-request": 60 * 60,
+   "resend-verification": 60 * 60,
+   "provider-register": 60 * 60,
++  report: 60 * 60,
++  block: 60 * 60,
++  unblock: 60 * 60,
++  unmatch: 60 * 60,
++  "conversation-start": 60 * 60,
++  "message-send": 10 * 60,
++  "booking-create": 60 * 60,
+ };
+ 
+-const LIMITS: Record<string, number> = {
++export const LIMITS: Record<string, number> = {
+   login: 5,
++  "login-account": 20,
+   register: 5,
+   "verify-token": 10,
+   "reset-token": 10,
+   "reset-request": 3,
+   "resend-verification": 5,
+   "provider-register": 5,
++  report: 5,
++  block: 10,
++  unblock: 10,
++  unmatch: 10,
++  "conversation-start": 20,
++  "message-send": 60,
++  "booking-create": 10,
+ };
+ 
+ export async function rateLimit(action: string, key: string): Promise<RateLimitResult> {
+-- 
+2.37.1 (Apple Git-137.1)
+

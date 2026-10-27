@@ -1,0 +1,408 @@
+From 6192045cf273c06d70d824ac80716ca124355383 Mon Sep 17 00:00:00 2001
+From: Sandro Guilliety <188060053+fokandzi@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 00:09:11 +0100
+Subject: [PATCH 1/5] test: hermetic test harness (in-process PGlite, no
+ network, no .env)
+
+The four DB suites in src/db/*.test.ts load .env and write to the shared
+dev/production Neon database. This adds a runner that cannot:
+- scrubs DB/Stripe/Resend/Uploadthing/Neon/Vercel env, sentinel DATABASE_URL
+- redirects src/db.ts to an in-process PGlite built from src/db/migrations
+- blocks outbound fetch; refuses any suite that reads .env / DATABASE_URL
+- runs bun:test-style suites under Node 22+ (bun test still works)
+
+PGlite devDependency matches fix/breeder-subscription-cancellation.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ bun.lock                                |   3 +
+ package.json                            |   4 +-
+ scripts/hermetic-test/bun-test-shim.mjs | 116 ++++++++++++++++++++++++
+ scripts/hermetic-test/run.mjs           | 102 +++++++++++++++++++++
+ src/test-support/pglite-db.ts           |  99 ++++++++++++++++++++
+ 5 files changed, 323 insertions(+), 1 deletion(-)
+ create mode 100644 scripts/hermetic-test/bun-test-shim.mjs
+ create mode 100644 scripts/hermetic-test/run.mjs
+ create mode 100644 src/test-support/pglite-db.ts
+
+diff --git a/bun.lock b/bun.lock
+index 5d06c4a..2be50a1 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -23,6 +23,7 @@
+         "uploadthing": "^7.7.4",
+       },
+       "devDependencies": {
++        "@electric-sql/pglite": "0.5.8",
+         "@tailwindcss/vite": "^4.1.18",
+         "@types/node": "^25.3.0",
+         "@types/react": "^19.2.13",
+@@ -85,6 +86,8 @@
+ 
+     "@effect/platform": ["@effect/platform@0.90.3", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.33.0", "find-my-way-ts": "^0.1.6", "msgpackr": "^1.11.4", "multipasta": "^0.2.7" }, "peerDependencies": { "effect": "^3.17.7" } }, "sha512-XvQ37yzWQKih4Du2CYladd1i/MzqtgkTPNCaN6Ku6No4CK83hDtXIV/rP03nEoBg2R3Pqgz6gGWmE2id2G81HA=="],
+ 
++    "@electric-sql/pglite": ["@electric-sql/pglite@0.5.8", "", {}, "sha512-n9tsbUOhwx2epK1V0ZG9Ar4SHWUju04dhmzZXiSBXwBoleOvIfals33NAaWgagQVAL4Rbvx/Ptsu3P+pA09f6Q=="],
++
+     "@emnapi/runtime": ["@emnapi/runtime@1.11.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-vgj7R3y3Wgx24IQaGPA/R6YFXLHVMOZ0uVEyIQPaWs+rd1AzfEMXlAC22FYwO1XkKR6NPsq7mUandH8oIRdZFw=="],
+ 
+     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.28.1", "", { "os": "aix", "cpu": "ppc64" }, "sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ=="],
+diff --git a/package.json b/package.json
+index 9092fef..67326b0 100644
+--- a/package.json
++++ b/package.json
+@@ -10,7 +10,8 @@
+     "publish": "bash ./publish.sh",
+     "go-live": "bash ./go-live.sh",
+     "format": "prettier --write .",
+-    "db:migrate": "bun run scripts/migrate.ts"
++    "db:migrate": "bun run scripts/migrate.ts",
++    "test:hermetic": "node scripts/hermetic-test/run.mjs"
+   },
+   "dependencies": {
+     "@capacitor/android": "^8.4.2",
+@@ -31,6 +32,7 @@
+     "uploadthing": "^7.7.4"
+   },
+   "devDependencies": {
++    "@electric-sql/pglite": "0.5.8",
+     "@tailwindcss/vite": "^4.1.18",
+     "@types/node": "^25.3.0",
+     "@types/react": "^19.2.13",
+diff --git a/scripts/hermetic-test/bun-test-shim.mjs b/scripts/hermetic-test/bun-test-shim.mjs
+new file mode 100644
+index 0000000..1b21135
+--- /dev/null
++++ b/scripts/hermetic-test/bun-test-shim.mjs
+@@ -0,0 +1,116 @@
++// Minimal `bun:test` surface for running the hermetic suites under Node
++// (describe/test/expect/hooks/mock.module). mock.module is a no-op here: the
++// runner already redirects src/db.ts to the PGlite test database at resolve
++// time, which is the only module the hermetic suites mock.
++import { isDeepStrictEqual, inspect } from "node:util";
++
++const stack = [];
++
++function current() {
++  return stack[stack.length - 1] ?? null;
++}
++function newSuite(name, parent) {
++  return { name, parent, beforeAll: [], afterAll: [], beforeEach: [], afterEach: [], children: [] };
++}
++export const root = newSuite("", null);
++stack.push(root);
++
++export function describe(name, fn) {
++  const s = newSuite(name, current());
++  current().children.push({ kind: "suite", suite: s });
++  stack.push(s);
++  try {
++    fn();
++  } finally {
++    stack.pop();
++  }
++}
++export function test(name, fn) {
++  current().children.push({ kind: "test", name, fn });
++}
++test.skip = (name) => current().children.push({ kind: "skip", name });
++describe.skip = (name) => current().children.push({ kind: "skip", name });
++export const it = test;
++export const beforeAll = (fn) => current().beforeAll.push(fn);
++export const afterAll = (fn) => current().afterAll.push(fn);
++export const beforeEach = (fn) => current().beforeEach.push(fn);
++export const afterEach = (fn) => current().afterEach.push(fn);
++export const mock = Object.assign(() => {}, { module: () => {} });
++
++const fmt = (v) => inspect(v, { depth: 4, breakLength: 120 });
++
++function matchers(actual, negate) {
++  const check = (pass, msg) => {
++    if (pass === negate) throw new Error((negate ? "not " : "") + msg);
++  };
++  return {
++    toBe: (e) => check(Object.is(actual, e), `expected ${fmt(actual)} to be ${fmt(e)}`),
++    toEqual: (e) =>
++      check(
++        isDeepStrictEqual(JSON.parse(JSON.stringify(actual ?? null)), JSON.parse(JSON.stringify(e ?? null))),
++        `expected ${fmt(actual)} to equal ${fmt(e)}`,
++      ),
++    toStrictEqual: (e) => check(isDeepStrictEqual(actual, e), `expected ${fmt(actual)} to strictly equal ${fmt(e)}`),
++    toBeTruthy: () => check(!!actual, `expected ${fmt(actual)} to be truthy`),
++    toBeFalsy: () => check(!actual, `expected ${fmt(actual)} to be falsy`),
++    toBeNull: () => check(actual === null, `expected ${fmt(actual)} to be null`),
++    toBeUndefined: () => check(actual === undefined, `expected ${fmt(actual)} to be undefined`),
++    toBeDefined: () => check(actual !== undefined, `expected value to be defined`),
++    toContain: (e) => check(actual?.includes?.(e) ?? false, `expected ${fmt(actual)} to contain ${fmt(e)}`),
++    toMatch: (re) => check(new RegExp(re).test(String(actual)), `expected ${fmt(actual)} to match ${re}`),
++    toHaveLength: (n) => check(actual?.length === n, `expected length ${actual?.length} to be ${n}`),
++    toBeGreaterThan: (n) => check(actual > n, `expected ${actual} > ${n}`),
++    toBeGreaterThanOrEqual: (n) => check(actual >= n, `expected ${actual} >= ${n}`),
++    toBeLessThan: (n) => check(actual < n, `expected ${actual} < ${n}`),
++    toBeLessThanOrEqual: (n) => check(actual <= n, `expected ${actual} <= ${n}`),
++    toThrow: (re) => {
++      let threw = false;
++      let err;
++      try {
++        actual();
++      } catch (e) {
++        threw = true;
++        err = e;
++      }
++      check(threw && (!re || new RegExp(re).test(String(err?.message ?? err))), `expected function to throw ${re ?? ""}`);
++    },
++  };
++}
++export function expect(actual) {
++  const m = matchers(actual, false);
++  m.not = matchers(actual, true);
++  return m;
++}
++
++async function runSuite(suite, prefix, hooks, out) {
++  const name = suite.name ? (prefix ? `${prefix} > ${suite.name}` : suite.name) : prefix;
++  const each = { before: [...hooks.before, ...suite.beforeEach], after: [...suite.afterEach, ...hooks.after] };
++  try {
++    for (const h of suite.beforeAll) await h();
++  } catch (e) {
++    out.push({ name: `${name} (beforeAll)`, ok: false, error: e });
++    return;
++  }
++  for (const child of suite.children) {
++    if (child.kind === "suite") await runSuite(child.suite, name, each, out);
++    else if (child.kind === "skip") out.push({ name: `${name} > ${child.name}`, skipped: true });
++    else {
++      const full = name ? `${name} > ${child.name}` : child.name;
++      try {
++        for (const h of each.before) await h();
++        await child.fn();
++        for (const h of each.after) await h();
++        out.push({ name: full, ok: true });
++      } catch (e) {
++        out.push({ name: full, ok: false, error: e });
++      }
++    }
++  }
++  for (const h of suite.afterAll) await h();
++}
++
++export async function runAll() {
++  const out = [];
++  await runSuite(root, "", { before: [], after: [] }, out);
++  return out;
++}
+diff --git a/scripts/hermetic-test/run.mjs b/scripts/hermetic-test/run.mjs
+new file mode 100644
+index 0000000..583120e
+--- /dev/null
++++ b/scripts/hermetic-test/run.mjs
+@@ -0,0 +1,102 @@
++#!/usr/bin/env node
++// Hermetic test runner — runs bun:test-style suites under Node with NO network
++// database, NO outbound fetch and NO provider credentials.
++//
++//   node scripts/hermetic-test/run.mjs [suite.test.ts ...]
++//
++// Fail-closed guarantees (checked before any suite is imported):
++//   - every DB / Stripe / Resend / Uploadthing / Neon / Vercel variable is
++//     removed from the environment, and DATABASE_URL is replaced by an
++//     unroutable sentinel, so a stray neon() call cannot reach a real database;
++//   - src/db.ts is redirected to src/test-support/pglite-db.ts (in-process);
++//   - globalThis.fetch throws, so no email/payment/upload provider is called;
++//   - a suite that reads .env (the legacy network-DB suites) is refused.
++import { createRequire, registerHooks } from "node:module";
++import { existsSync, readFileSync } from "node:fs";
++import { dirname, join, resolve } from "node:path";
++import { fileURLToPath, pathToFileURL } from "node:url";
++
++const here = dirname(fileURLToPath(import.meta.url));
++const repo = resolve(here, "..", "..");
++
++const DEFAULT_SUITES = [
++  "src/lib/auth/security-hardening.test.ts",
++  "src/lib/launch-fixes.test.ts",
++  "src/lib/match-ui.test.ts",
++  "src/lib/seo-titles.test.ts",
++];
++
++const SENSITIVE = /DATABASE|^PG|NEON|STRIPE|RESEND|UPLOADTHING|REVENUECAT|POSTHOG|VERCEL|MAIL_FROM|ATTRIBUTION/i;
++for (const key of Object.keys(process.env)) if (SENSITIVE.test(key)) delete process.env[key];
++process.env.DATABASE_URL = "postgres://hermetic-sentinel.invalid:1/never";
++process.env.NODE_ENV = "test";
++
++// Bun allows require() inside ES modules (src/lib/auth/session.ts uses it for
++// node:crypto); Node does not, so provide the same global.
++globalThis.require = createRequire(import.meta.url);
++
++globalThis.fetch = async (input) => {
++  throw new Error(`HERMETIC: outbound fetch blocked (${String(input).split("?")[0]})`);
++};
++
++const shimUrl = pathToFileURL(join(here, "bun-test-shim.mjs")).href;
++const dbUrl = pathToFileURL(join(repo, "src", "db.ts")).href;
++const testDbUrl = pathToFileURL(join(repo, "src", "test-support", "pglite-db.ts")).href;
++
++registerHooks({
++  resolve(specifier, context, next) {
++    if (specifier === "bun:test") return { url: shimUrl, shortCircuit: true };
++    const candidates = [specifier];
++    if ((specifier.startsWith(".") || specifier.startsWith("/")) && !/\.[cm]?[jt]sx?$/.test(specifier)) {
++      candidates.push(`${specifier}.ts`, `${specifier}/index.ts`);
++    }
++    let lastErr;
++    for (const c of candidates) {
++      try {
++        const r = next(c, context);
++        if (r.url === dbUrl) return { url: testDbUrl, shortCircuit: true };
++        return r;
++      } catch (e) {
++        lastErr = e;
++      }
++    }
++    throw lastErr;
++  },
++  // Bun exposes `import.meta.dir`; Node calls it `import.meta.dirname`.
++  load(url, context, next) {
++    const r = next(url, context);
++    if (url.startsWith("file:") && /\.tsx?$/.test(url) && r.source) {
++      const text = typeof r.source === "string" ? r.source : Buffer.from(r.source).toString("utf8");
++      if (/import\.meta\.dir\b/.test(text)) return { ...r, source: text.replace(/import\.meta\.dir\b/g, "import.meta.dirname") };
++    }
++    return r;
++  },
++});
++
++const suites = (process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_SUITES).map((s) => resolve(repo, s));
++for (const file of suites) {
++  if (!existsSync(file)) throw new Error(`HERMETIC: no such suite ${file}`);
++  if (/["'`]\.env|DATABASE_URL/.test(readFileSync(file, "utf8"))) {
++    throw new Error(`HERMETIC: refusing ${file} — it reads .env / DATABASE_URL (network database suite)`);
++  }
++}
++
++const shim = await import(shimUrl);
++for (const file of suites) await import(pathToFileURL(file).href);
++const results = await shim.runAll();
++
++let failed = 0;
++let skipped = 0;
++for (const r of results) {
++  if (r.skipped) {
++    skipped++;
++    console.log(`  skip  ${r.name}`);
++  } else if (r.ok) console.log(`  pass  ${r.name}`);
++  else {
++    failed++;
++    console.log(`  FAIL  ${r.name}\n        ${String(r.error?.stack ?? r.error).split("\n").slice(0, 4).join("\n        ")}`);
++  }
++}
++const passed = results.length - failed - skipped;
++console.log(`\n${passed} pass, ${failed} fail, ${skipped} skip (${suites.length} files, hermetic: PGlite, no network)`);
++process.exit(failed ? 1 : 0);
+diff --git a/src/test-support/pglite-db.ts b/src/test-support/pglite-db.ts
+new file mode 100644
+index 0000000..e9c3068
+--- /dev/null
++++ b/src/test-support/pglite-db.ts
+@@ -0,0 +1,99 @@
++/**
++ * Hermetic test database — an in-process PGlite Postgres built from the real
++ * src/db/migrations, behind the same surface as neon(): a tagged template that
++ * resolves to rows, `.query(text, params)`, and the function form of
++ * `.transaction(tx => [...])` that src/lib/* uses.
++ *
++ * It NEVER reads DATABASE_URL and opens no network connection, so a suite built
++ * on it cannot reach the production Neon database (the four legacy suites in
++ * src/db/*.test.ts do: they load .env and write to the shared dev/prod DB).
++ *
++ * Wiring:
++ *   - node scripts/hermetic-test/run.mjs redirects every import of src/db.ts to
++ *     this module at resolve time;
++ *   - under `bun test`, the suite calls mock.module("../../db", ...) itself.
++ */
++import { PGlite } from "@electric-sql/pglite";
++import { readdirSync, readFileSync } from "node:fs";
++import { join } from "node:path";
++
++type Row = Record<string, any>;
++interface PendingQuery {
++  text: string;
++  values: unknown[];
++}
++
++export const pg = new PGlite();
++
++function build(strings: TemplateStringsArray, values: unknown[]): PendingQuery {
++  let text = "";
++  strings.forEach((s, i) => {
++    text += s;
++    if (i < values.length) text += `$${i + 1}`;
++  });
++  return { text, values };
++}
++
++function txTag(strings: TemplateStringsArray, ...values: unknown[]): PendingQuery {
++  return build(strings, values);
++}
++
++function tag(strings: TemplateStringsArray, ...values: unknown[]): Promise<Row[]> {
++  const q = build(strings, values);
++  return pg.query(q.text, q.values as any[]).then((r) => r.rows as Row[]);
++}
++tag.query = (text: string, params: unknown[] = []): Promise<Row[]> =>
++  pg.query(text, params as any[]).then((r) => r.rows as Row[]);
++tag.transaction = async (fn: (tx: typeof txTag) => PendingQuery[]): Promise<Row[][]> => {
++  const items = fn(txTag);
++  return pg.transaction(async (tx) => {
++    const out: Row[][] = [];
++    for (const q of items) out.push((await tx.query(q.text, q.values as any[])).rows as Row[]);
++    return out;
++  });
++};
++
++/** Drop-in for `sql` from src/db.ts. */
++export const sql = () => tag;
++export const pgSql = tag;
++
++let migrated: Promise<void> | null = null;
++
++/** Apply every migration once, split exactly like scripts/migrate.ts does. */
++export function migrate(): Promise<void> {
++  if (!migrated) {
++    migrated = (async () => {
++      const dir = join(import.meta.dirname, "..", "db", "migrations");
++      for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
++        const text = readFileSync(join(dir, file), "utf8")
++          .split("\n")
++          .filter((line) => !/^\s*--/.test(line))
++          .join("\n");
++        for (const stmt of text.split(";").map((s) => s.trim()).filter(Boolean)) {
++          await pg.query(stmt);
++        }
++      }
++      // Schema drift: columns production has (created by runtime DDL in
++      // src/db/schema.ts) that NO migration creates. Without them a
++      // migrations-only database fails account deletion (deletion.ts reads
++      // dog_profiles.email). Reported in docs/security-hardening/; mirrored here
++      // so the suite matches the production shape.
++      await pg.query("ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS email TEXT");
++    })();
++  }
++  return migrated;
++}
++
++/** A synthetic user row; returns its id. */
++export async function insertUser(
++  email: string,
++  opts: { passwordHash?: string | null; verified?: boolean; isTest?: boolean; name?: string } = {},
++): Promise<number> {
++  const [row] = await tag`
++    INSERT INTO users (email, name, password_hash, email_verified_at, is_test, role)
++    VALUES (${email}, ${opts.name ?? "Hermetic User"}, ${opts.passwordHash ?? null},
++            ${opts.verified ? new Date().toISOString() : null}, ${opts.isTest ?? false}, 'user')
++    RETURNING id
++  `;
++  return Number(row.id);
++}
+-- 
+2.37.1 (Apple Git-137.1)
+

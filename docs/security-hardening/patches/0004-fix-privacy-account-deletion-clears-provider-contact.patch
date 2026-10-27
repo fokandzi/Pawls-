@@ -1,0 +1,90 @@
+From 9edf50dd761b228974d27d7913401bd4ff86e9ba Mon Sep 17 00:00:00 2001
+From: Sandro Guilliety <188060053+fokandzi@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 00:09:11 +0100
+Subject: [PATCH 4/5] fix(privacy): account deletion clears provider contact
+ data and stops mails to it
+
+- owned provider listings keep their name (booking history) but lose email,
+  phone, website, photo and free-text description, leave public supply
+  ('suspended') and their services stop being bookable
+- bookings anonymised by customer_user_id as well as by email
+- mail_log rows addressed to the user are anonymised
+- providerContact() never mails an ownerless listing's stored address
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/lib/auth/deletion.ts  | 26 ++++++++++++++++++++++++--
+ src/lib/booking-emails.ts |  5 +++++
+ 2 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/src/lib/auth/deletion.ts b/src/lib/auth/deletion.ts
+index 06ed06e..347df9e 100644
+--- a/src/lib/auth/deletion.ts
++++ b/src/lib/auth/deletion.ts
+@@ -27,7 +27,7 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
+       WHERE user_id = ${user.id} OR (user_id IS NULL AND lower(email) = lower(${user.email}))
+     ` as any;
+     const dogIds = (dogRows as Array<{ id: number }>).map((r) => Number(r.id));
+-    const [hasSwipes, hasMatches, hasMessages, hasBookings, hasSubscriptions, hasReferrals, hasConversations] =
++    const [hasSwipes, hasMatches, hasMessages, hasBookings, hasSubscriptions, hasReferrals, hasConversations, hasProviders, hasServices] =
+       await Promise.all([
+         tableExists("swipes"),
+         tableExists("matches"),
+@@ -36,6 +36,8 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
+         tableExists("subscriptions"),
+         tableExists("referrals"),
+         tableExists("conversations"),
++        tableExists("providers"),
++        tableExists("services"),
+       ]);
+     await sql().transaction((tx) => {
+       const q: any[] = [
+@@ -51,8 +53,28 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
+       }
+       if (hasBookings) {
+         q.push(tx`UPDATE bookings SET customer_name = 'Deleted user', customer_email = 'deleted@example.invalid'
+-                  WHERE lower(customer_email) = lower(${user.email})`);
++                  WHERE customer_user_id = ${user.id} OR lower(customer_email) = lower(${user.email})`);
+       }
++      // Provider listings the user owns are business records (bookings point
++      // at them) and are RETAINED, but nothing that reaches the person stays:
++      // contact email/phone/website and photo are cleared, the description
++      // (free text, may carry contact details) is emptied, the listing leaves
++      // public supply ('suspended') and its services stop being bookable. The
++      // name is kept so counterparties' booking history still reads correctly.
++      // owner_user_id then goes NULL via its FK when the user row is deleted.
++      if (hasProviders) {
++        if (hasServices) {
++          q.push(tx`UPDATE services SET is_active = false
++                    WHERE provider_id IN (SELECT id FROM providers WHERE owner_user_id = ${user.id})`);
++        }
++        q.push(tx`UPDATE providers
++                  SET email = NULL, phone = NULL, website = NULL, image_url = NULL, description = '',
++                      approval_status = CASE WHEN approval_status = 'rejected' THEN 'rejected' ELSE 'suspended' END
++                  WHERE owner_user_id = ${user.id}`);
++      }
++      // Delivery accounting is kept (honest send history), the person is not.
++      q.push(tx`UPDATE mail_log SET "to" = 'deleted@example.invalid', body = '[removed: account deleted]'
++                WHERE lower("to") = lower(${user.email})`);
+       // Conversations the user participated in are deleted with the account
+       // (messages + participant rows cascade via FK). This is the documented
+       // deletion policy: a deleted user leaves no conversation artifacts.
+diff --git a/src/lib/booking-emails.ts b/src/lib/booking-emails.ts
+index 7d931b7..91335bf 100644
+--- a/src/lib/booking-emails.ts
++++ b/src/lib/booking-emails.ts
+@@ -126,6 +126,11 @@ async function providerContact(providerId: number): Promise<{ email: string | nu
+     `) as unknown as { email: string | null; owner_user_id: number | null; name: string | null }[];
+     const row = rows?.[0];
+     if (!row) return { email: null, ownerUserId: null, name: null };
++    // An ownerless listing belongs to a deleted (or never-bound) account: no
++    // stored address may be mailed on its behalf.
++    if (row.owner_user_id === null || row.owner_user_id === undefined) {
++      return { email: null, ownerUserId: null, name: row.name ? String(row.name) : null };
++    }
+     let email = row.email ? String(row.email) : null;
+     // Fall back to the owning account's address when the listing has none.
+     if (!email && row.owner_user_id) {
+-- 
+2.37.1 (Apple Git-137.1)
+
