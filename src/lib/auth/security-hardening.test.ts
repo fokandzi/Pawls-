@@ -165,6 +165,10 @@ describe("email tokens", () => {
     expect(u.email_verified_at).toBeTruthy();
     const replay = await auth.handleAuthPost(post("/auth/verify-email", { token: raw }));
     expect(replay.status).toBe(404);
+    // The token's rate-limit row must not hold the raw (credential) value.
+    const keys = await q`SELECT key FROM rate_limits WHERE action = 'verify-token'`;
+    expect(keys.length).toBeGreaterThan(0);
+    expect(JSON.stringify(keys)).not.toContain(raw);
   });
 });
 

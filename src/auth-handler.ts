@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword, needsRehash, constantTimeEqual } from "./
 import { issueEmailToken, consumeEmailToken } from "./lib/auth/email-tokens";
 import {
   createSession, revokeSession, revokeOtherSessions, revokeAllSessions,
-  getSessionUser, clearSessionCookieHeader, requestIsSecure,
+  getSessionUser, clearSessionCookieHeader, requestIsSecure, sha256Hex,
 } from "./lib/auth/session";
 import { rateLimit, clientIp } from "./lib/auth/rate-limit";
 import { assertSameOrigin } from "./lib/auth/csrf";
@@ -566,7 +566,9 @@ async function handleVerifyEmail(request: Request): Promise<Response> {
       links: VERIFY_LINKS,
     });
   }
-  const rl = await rateLimit("verify-token", `${clientIp(request)}|${token}`);
+  // Keyed on the token's hash: rate_limits.key is stored for up to 48 h and
+  // must never hold a working credential.
+  const rl = await rateLimit("verify-token", `${clientIp(request)}|${sha256Hex(token)}`);
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   try {
     await ensureAuthTables();
@@ -703,7 +705,7 @@ async function handlePasswordReset(request: Request): Promise<Response> {
       links: RESET_LINKS,
     });
   }
-  const rl = await rateLimit("reset-token", `${clientIp(request)}|${token}`);
+  const rl = await rateLimit("reset-token", `${clientIp(request)}|${sha256Hex(token)}`);
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   try {
     await ensureAuthTables();
