@@ -10,7 +10,8 @@
     "publish": "bash ./publish.sh",
     "go-live": "bash ./go-live.sh",
     "format": "prettier --write .",
-    "db:migrate": "bun run scripts/migrate.ts"
+    "db:migrate": "bun run scripts/migrate.ts",
+    "test:hermetic": "node scripts/hermetic-test/run.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
@@ -31,6 +32,7 @@
     "uploadthing": "^7.7.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^25.3.0",
     "@types/react": "^19.2.13",
