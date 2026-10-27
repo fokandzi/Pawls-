@@ -8,6 +8,20 @@
  *   reset-request:        3 / 1 hour per email           ('reset-request')
  *   resend-verification:  5 / 1 hour per IP              ('resend-verification')
  *   provider-register:    5 / 1 hour per IP              ('provider-register')
+ *   login-account:        20 / 15 min per email          ('login-account')
+ *   report:               5 / 1 hour per user            ('report')
+ *   block / unblock / unmatch: 10 / 1 hour per user, one bucket each
+ *   conversation-start:   20 / 1 hour per user           ('conversation-start')
+ *   message-send:         60 / 10 min per user           ('message-send')
+ *   booking-create:       10 / 1 hour per user           ('booking-create')
+ *
+ * Every action a caller uses MUST be listed below: an unlisted action silently
+ * falls back to 5/hour, which is how block/unmatch ran at 5/hour while
+ * safety-api-handler documented 10/hour.
+ *
+ * 'login-account' caps guesses against ONE account across rotating IPs (the
+ * email+IP key alone does not); the cost is that a flood can make that
+ * account's logins wait out the 15-minute window.
  *
  * Exceeded calls return { limited: true, retryAfterSeconds } so callers can
  * respond 429 with a Retry-After header. Old windows are cleaned up
@@ -21,24 +35,40 @@ export interface RateLimitResult {
   count: number;
 }
 
-const WINDOWS: Record<string, number> = {
+export const WINDOWS: Record<string, number> = {
   login: 15 * 60,
+  "login-account": 15 * 60,
   register: 60 * 60,
   "verify-token": 60 * 60,
   "reset-token": 60 * 60,
   "reset-request": 60 * 60,
   "resend-verification": 60 * 60,
   "provider-register": 60 * 60,
+  report: 60 * 60,
+  block: 60 * 60,
+  unblock: 60 * 60,
+  unmatch: 60 * 60,
+  "conversation-start": 60 * 60,
+  "message-send": 10 * 60,
+  "booking-create": 60 * 60,
 };
 
-const LIMITS: Record<string, number> = {
+export const LIMITS: Record<string, number> = {
   login: 5,
+  "login-account": 20,
   register: 5,
   "verify-token": 10,
   "reset-token": 10,
   "reset-request": 3,
   "resend-verification": 5,
   "provider-register": 5,
+  report: 5,
+  block: 10,
+  unblock: 10,
+  unmatch: 10,
+  "conversation-start": 20,
+  "message-send": 60,
+  "booking-create": 10,
 };
 
 export async function rateLimit(action: string, key: string): Promise<RateLimitResult> {

@@ -20,6 +20,7 @@
  */
 import { getSessionUser } from "./src/lib/auth/session";
 import { assertSameOrigin } from "./src/lib/auth/csrf";
+import { rateLimit } from "./src/lib/auth/rate-limit";
 import { sql } from "./src/db";
 import {
   discoveryCandidates,
@@ -50,6 +51,12 @@ function json(body: unknown, status = 200): Response {
 
 function badJson(message: string, status = 400): Response {
   return json({ ok: false, error: message }, status);
+}
+
+function rateLimited(retryAfterSeconds: number): Response {
+  const res = json({ ok: false, error: "RATE_LIMITED", message: "Too many requests — please try again later." }, 429);
+  res.headers.set("Retry-After", String(retryAfterSeconds));
+  return res;
 }
 
 /** Read a JSON or form-encoded body into a plain object. */
@@ -264,6 +271,8 @@ export async function handleMatchApi(request: Request): Promise<Response> {
       const csrf = assertSameOrigin(request);
       if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
       if (!sessionUser) return json({ ok: false, error: "UNAUTHENTICATED", message: "Please log in to continue." }, 401);
+      const startLimit = await rateLimit("conversation-start", `u${sessionUser.id}`);
+      if (startLimit.limited) return rateLimited(startLimit.retryAfterSeconds);
       const body = await readBody(request);
       const otherUserId = num(body.otherUserId ?? body.userId);
       if (otherUserId === null) return badJson("otherUserId is required");
@@ -305,6 +314,8 @@ export async function handleMatchApi(request: Request): Promise<Response> {
         if (msgMatch && request.method === "POST") {
           const csrf = assertSameOrigin(request);
           if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+          const sendLimit = await rateLimit("message-send", `u${sessionUser.id}`);
+          if (sendLimit.limited) return rateLimited(sendLimit.retryAfterSeconds);
           const body = await readBody(request);
           const result = await sendMessage(sessionUser.id, conversationId, body.body, body.senderProfileId);
           if (!result.ok) return json({ ok: false, error: result.error }, result.status);

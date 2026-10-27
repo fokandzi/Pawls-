@@ -208,7 +208,8 @@ export async function handleSafetyApi(request: Request): Promise<Response> {
     if (request.method !== "POST") return badJson("POST required", 405);
     const csrf = assertSameOrigin(request);
     if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
-    const rl = await rateLimit(pathname === "/api/safety/block" ? "block" : "unmatch", `u${session.id}`);
+    // One bucket per action (block / unblock / unmatch), each 10/hour per user.
+    const rl = await rateLimit(pathname.slice("/api/safety/".length), `u${session.id}`);
     if (rl.limited) {
       return json({ ok: false, error: "RATE_LIMITED", message: "Too many requests — please try again later." }, 429);
     }
