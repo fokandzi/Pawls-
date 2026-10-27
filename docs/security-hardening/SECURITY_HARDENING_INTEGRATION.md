@@ -16,7 +16,16 @@
 | 3 | `e93cc35` | fix(auth): redact email-token links, atomic single-use tokens, wrap legacy SHA-256 passwords (+ migration 011, scripts/security) | 2 (`login-account` registration) |
 | 4 | `9edf50d` | fix(privacy): account deletion clears provider contact data and stops mails to it | — |
 | 5 | `f482693` | test(security): hermetic suite | 1–4 |
-| 6 | docs commit (this folder) | docs | — |
+| 6 | `2a66c85` | docs (first package) | — |
+| 7 | `de14d60` | fix(schema): migration 012 adds `dog_profiles.email` (runtime-DDL drift); harness stops patching it | 5 |
+| 8 | `ea17020` | fix(privacy): deletion also anonymises `mail_log` rows sent to the listing address | 4, 5 |
+| 9 | `a89d4d6` | test(harness): refuse sockets, dns, WebSocket, child processes + self-check | 1 |
+| 10 | `a70df02` | fix(auth): verify/reset-token rate limits keyed on the token hash | 3, 5 |
+| 11 | final docs commit (review, browser cases, RLS assessment, audit ownership query) | docs + `readonly-security-audit.ts` | — |
+
+`git log --oneline bfc1eef..hardening/claude-parallel-security` lists the
+authoritative sequence. The archive's `patches/` folder holds the same
+commits as `git format-patch` files, numbered in apply order.
 
 `fix/breeder-subscription-cancellation` (`9325554`, `e353db6`, also unmerged)
 adds the same PGlite devDependency lines and owns migration `010`. This branch
@@ -29,7 +38,7 @@ first; if `bun.lock` conflicts, the conflict is only the same added lines.
 2. **CTO:** `bun test src/lib/auth/security-hardening.test.ts` (Bun) **and** `node scripts/hermetic-test/run.mjs`. Never plain `bun test`: it runs the legacy suites against the shared database.
 3. **CTO, Neon branch:** create a branch of the production DB, then point a preview at it, with its own storage, email and payment test keys.
    1. `DATABASE_URL=<branch> bun run scripts/security/readonly-security-audit.ts` and record the counts (expect roughly 125 unredacted `mail_log` rows and 5 bare legacy hashes, if the report is right).
-   2. `DATABASE_URL=<branch> bun run db:migrate` (applies `011`).
+   2. `DATABASE_URL=<branch> bun run db:migrate` (applies `011` and `012`; `012` is a no-op where the column exists).
    3. Re-run the audit: unredacted `mail_log` should be 0, and currently-valid tokens should be 0.
    4. `DATABASE_URL=<branch> bun run scripts/security/wrap-legacy-password-hashes.ts` (dry run), then `--apply`. Re-audit: bare legacy should be 0, wrapped should equal the dry-run count.
    5. On the preview: exercise register, login, verify (if Resend test keys exist), reset, block ×11, send messages, book, and delete a provider account.
@@ -56,6 +65,8 @@ first; if `bun.lock` conflicts, the conflict is only the same added lines.
   - **Redaction and token expiry are deliberately not reversible.** The values removed were credentials.
   - **Index:** `DROP INDEX IF EXISTS idx_email_tokens_expires_at`.
   - **Re-applying is a no-op.**
+- **Migration `012`:** a no-op on production. On a migrations-only DB: `ALTER TABLE dog_profiles DROP COLUMN IF EXISTS email`, but deletion then fails again.
+- **Full irreversibility and compatibility table:** `SECURITY_HARDENING_REVIEW.md` §5.
 - **Wrapped password hashes have no inverse, by design.**
   - **Timing:** run `--apply` only after commit 3 is live in production.
   - **If commit 3 must be reverted later:** keep the `sha256-scrypt$` branch of `verifyPassword` in `hash.ts`, or those users cannot log in.
@@ -70,9 +81,12 @@ first; if `bun.lock` conflicts, the conflict is only the same added lines.
 4. **Uploadthing** is not configured (O6).
 5. **F9:** the Stripe key's location is unknown; rotation is pending (O2, O3).
 6. **Bun:** this branch is untested under Bun and on a real Neon branch (see the test-results doc).
-7. **F11:** schema drift, so deletion fails on a migrations-only DB.
-8. **F8:** least-privilege role blocked by runtime DDL.
-9. **F12:** future bookings of a deleted provider are not cancelled.
-10. **Legacy suites** can still be run with plain `bun test` against the shared DB.
+7. **Browser cases** in `BROWSER_TEST_CASES.md` not yet run; two UI gaps are known there (message 429 copy, no-JS booking notice) plus the resend-link discovery gap.
+8. **F12:** future bookings of a deleted provider are not cancelled.
+9. **Legacy suites** can still be run with plain `bun test` against the shared DB.
+
+F11 (schema drift) is fixed on this branch by `012`, and is no longer a blocker
+once integrated. F8 is recommended hardening, not a launch blocker (see the
+findings doc).
 
 Each item above blocks launch on its own; missing credentials are not the only blocker.

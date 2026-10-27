@@ -25,11 +25,21 @@ Status legend:
 | F5 | Rate-limit gaps; 5/h vs 10/h discrepancy | CONFIRMED (code) | Medium | yes |
 | F6 | Login limit bypassable by rotating IPs | CONFIRMED (code) | Medium | yes |
 | F7 | Legacy unsalted SHA-256 passwords | PARTIAL (format supported; count of 5 unverified) | Medium | yes (wrap + upgrade) |
-| F8 | Single DB role, no RLS | PARTIAL (architecture confirmed; role count unverified) | Medium | proposal only |
+| F8 | Single DB role, no RLS | PARTIAL (server-only architecture confirmed; role/ownership unverified) | Medium | assessment + proposal only |
 | F9 | Live Stripe secret in the repository | NOT CONFIRMED in git | Unknown until located | n/a |
 | F10 | Resend / Uploadthing not configured; login fails open | CONFIRMED (code + Phase 2B notes) | High (launch) | n/a: owner action |
-| F11 | Schema drift: `dog_profiles.email` exists only via runtime DDL | CONFIRMED (hermetic DB) | Medium | reported, not changed |
+| F11 | Schema drift: `dog_profiles.email` exists only via runtime DDL | CONFIRMED (hermetic DB) | Medium | yes (migration 012) |
+| F13 | Raw verify/reset token stored in `rate_limits.key` (≤48 h) | CONFIRMED (code, found in self-review) | Medium | yes (`a70df02`) |
 | F12 | Other deletion and retention gaps | CONFIRMED (code) | Medium | reported, not changed |
+
+## Classification (2026-10-28 revision)
+
+| Kind | Items |
+|---|---|
+| **Observed facts** | F1 (live HTTP 200s on 2026-10-27, HEAD only); F2/F13 mechanism (code); F3, F5, F6, F11 (code + hermetic tests); F4 (code); F8 architecture (code); F9 absence in git; F10 gate behaviour (code) |
+| **Hypotheses (unverified)** | The "125" are `mail_log` rows; the "5" legacy rows exist; production runs `cb6b232` (consistent with `/health` 404, deployment id not read); the runtime DB role owns the tables (F8); Vercel request logs keep token query strings (review §3); the Stripe key sits in the sandbox `.env` or Vercel env (F9) |
+| **Recommended hardening (not blockers)** | F8 least-privilege role + optional FORCEd RLS; `Referrer-Policy: no-referrer` on token pages; token exchange off the query string; resend-link form on the unverified-login page; provider `location` and `audit_log` email retention decisions |
+| **Confirmed launch blockers** | Production not on the fixed code (nothing deployed); F1 artifacts still public (incl. old deployment URLs); F10 no email delivery, so login fails open, and enabling it locks out all existing users without a discovered resend path; Uploadthing not configured; F9 key location unknown, rotation pending; Vercel secrets not Sensitive (O3); this branch not validated under Bun or on a Neon branch; deleted provider's future bookings not cancelled (F12) |
 
 ---
 
@@ -130,16 +140,35 @@ These are HEAD requests to `https://pawls.club` on 2026-10-27. Nothing was downl
   - **On login:** any legacy, wrapped or weak-parameter hash is re-hashed with scrypt, also compare-and-swap. Modern rows are untouched.
   - **Password reset still works** and always writes a fresh scrypt hash.
 
-## F8: database isolation
+## F8: database isolation (architecture-specific assessment)
 
-- **Architecture:**
-  - **Server-side only:** the Neon HTTP driver is called through one `DATABASE_URL`.
-  - **No client database API:** no Supabase, no PostgREST, no Neon Data API.
-  - **No RLS, roles or grants anywhere in the repo.**
-- **RLS alone proves nothing here.** Every query runs as the same table-owner role, and an owner bypasses RLS unless it is FORCEd. Tenant isolation is enforced in application code (`requireUser`, ownership checks), which is the right layer for this architecture.
-- **The useful control is privilege separation:** a DML-only application role and a separate migration/DDL role.
-- **Prerequisite:** the app runs 81 DDL statements at request time across 7 files (`ensure.ts` 26, `schema.ts` 31, `webhook-core.ts` 8, `provider-core.ts` 5, `dog-profile-handler.ts` 5, `booking-core.ts` 3, `iap-core.ts` 3). These must move into migrations, or tolerate permission errors, before a DML-only role can be used.
-- **Proposal, not executed:** `docs/security-hardening/db-least-privilege-proposal.sql`.
+**Observed facts (repository; nothing measured on the database):**
+- Every query is server-side through `src/db.ts`: the Neon HTTP driver with a single `DATABASE_URL`. The only other `neon(` callers are `src/db/production-seed.ts` and `scripts/` (CLI only).
+- No client-side database path exists. There is no Supabase client, PostgREST or Neon Data API, no `VITE_`-exposed connection string, and no browser import of `src/db.ts`.
+- The repository contains no `CREATE ROLE`, `GRANT`, `ENABLE ROW LEVEL SECURITY` or `CREATE POLICY`.
+- Per-user isolation lives in application code: session lookup (`requireUser`, `getSessionUser`) plus `WHERE owner_user_id / user_id = <session id>` predicates, and ownership checks in `*-core.ts`.
+- The app runs about 81 DDL statements at request time across 7 files (`ensure.ts` 26, `schema.ts` 31, `webhook-core.ts` 8, `provider-core.ts` 5, `dog-profile-handler.ts` 5, `booking-core.ts` 3, `iap-core.ts` 3). The runtime role therefore must be able to create and alter tables.
+
+**Hypotheses (unverified; need the read-only audit on a Neon branch):**
+- The single login role is the Neon project owner role (`neondb_owner` or similar) and owns the tables. The audit script counts login roles and RLS-enabled tables; it does not yet report table ownership.
+- If that holds: Postgres exempts table owners from RLS unless `FORCE ROW LEVEL SECURITY` is set. Enabling RLS without FORCE would have **no effect** on the app's queries. With FORCE, every query would need a per-request user context (e.g. `SET app.user_id`), which the stateless Neon HTTP driver only supports inside an explicit transaction per request.
+
+**What RLS would and would not add here:**
+- **It would add:** defence-in-depth against a missed ownership predicate (an IDOR bug in app code). That needs FORCEd RLS plus per-request `SET LOCAL app.user_id` inside a transaction, plus policies for every user-scoped table (`dog_profiles`, `bookings`, `conversations`, `messages`, `conversation_participants`, `blocks`, `reports`, `subscriptions`, `providers`, `services`). That's a substantial refactor of every query path.
+- **It would not add:** protection against a leaked `DATABASE_URL`. An attacker using the owner credential bypasses RLS, or can disable it. With no client database API, there is no "anon key" exposure for RLS to contain.
+- **Assessment:** valuable later as a second layer for IDOR, but costly and not the first control. A least-privilege runtime role reduces the impact of a leaked credential (no DDL, no `DROP`, no `audit_log` rewrite) and is cheaper. Neither is proven by enabling a flag; each must be validated by queries that are expected to fail.
+
+**Recommended hardening (ordered; none executed):**
+1. Run `readonly-security-audit.ts` on a Neon branch, and add a table-ownership query (`pg_tables.tableowner`) to confirm the hypotheses above.
+2. Move runtime DDL into migrations (prerequisite for 3).
+3. Least-privilege runtime role: `docs/security-hardening/db-least-privilege-proposal.sql` (proposal only), validated on a preview by checking that DDL and `UPDATE audit_log` are refused.
+4. Optionally, FORCEd RLS with per-request context on the user-scoped tables, as IDOR defence-in-depth, with a negative test per table (another user's id returns 0 rows).
+5. Keep `DATABASE_URL` Sensitive in Vercel (owner action O3); revoke the account-wide `NEON_API_KEY` (O4).
+
+**Confirmed launch blockers from this area:** none on their own. The
+isolation that matters at launch, application-level ownership checks, exists
+and was exercised for deletion and safety by the hermetic suite. The
+credential-handling items (O3, O4) are blockers, and are listed under F9/F10.
 
 ## F9: "live Stripe secret in the repository"
 
@@ -164,7 +193,7 @@ These are HEAD requests to `https://pawls.club` on 2026-10-27. Nothing was downl
 
 - **Mismatch:** `dog_profiles.email` exists in production only because of runtime DDL in `src/db/schema.ts`; no migration creates it.
 - **Effect:** `deleteUserAccount()` reads that column, so on a migrations-only database (for example a fresh Neon preview branch) account deletion fails with a 500.
-- **Handling:** the hermetic harness mirrors the column. A one-line additive migration should be added by the schema owner.
+- **Fixed in `de14d60`:** migration `012_dog_profiles_email_drift.sql` adds the column with the runtime definition (nullable TEXT), so it is a no-op on production. The harness no longer patches the column in, and a test proves `001–011` alone lack it while the full set supports deletion. No CTO commit or branch claimed this fix (`origin` checked 2026-10-28). The cto.new workspace could not be checked, so overlap remains possible.
 
 ## F12: other deletion and retention gaps (not changed)
 

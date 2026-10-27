@@ -30,6 +30,9 @@ const checks: [string, string][] = [
   ["non-demo providers with NO owner but contact data", `SELECT COUNT(*)::int AS n FROM providers WHERE is_demo = false AND owner_user_id IS NULL AND (email IS NOT NULL OR phone IS NOT NULL OR website IS NOT NULL)`],
   ["  ...of which approval_status='approved'", `SELECT COUNT(*)::int AS n FROM providers WHERE is_demo = false AND owner_user_id IS NULL AND approval_status = 'approved' AND (email IS NOT NULL OR phone IS NOT NULL OR website IS NOT NULL)`],
   ["database roles that can log in", `SELECT COUNT(*)::int AS n FROM pg_roles WHERE rolcanlogin`],
+  ["public tables", `SELECT COUNT(*)::int AS n FROM pg_tables WHERE schemaname = 'public'`],
+  ["  ...owned by the connecting role (RLS-exempt unless FORCEd)", `SELECT COUNT(*)::int AS n FROM pg_tables WHERE schemaname = 'public' AND tableowner = current_user`],
+  ["connecting role is superuser or can create roles (0 = no)", `SELECT COUNT(*)::int AS n FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolcreaterole)`],
   ["public tables with row level security enabled", `SELECT COUNT(*)::int AS n FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace WHERE ns.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity`],
 ];
 

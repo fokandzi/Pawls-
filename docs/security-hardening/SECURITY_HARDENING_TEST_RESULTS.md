@@ -4,24 +4,60 @@
 
 | Item | Evidence |
 |---|---|
-| Database | In-process PGlite 0.5.8 (`src/test-support/pglite-db.ts`), built from `src/db/migrations/001–011` (all statements applied, 0 failures), plus one production-drift column (`dog_profiles.email`, see F11). |
+| Database | In-process PGlite 0.5.8 (`src/test-support/pglite-db.ts`), built from `src/db/migrations/001–012` only (all statements applied, 0 failures). Since `de14d60` the harness adds no columns of its own. |
 | Network database | None. The runner deletes every `DATABASE*`/`PG*`/`NEON*` variable, sets `DATABASE_URL` to the sentinel `postgres://hermetic-sentinel.invalid:1/never`, and redirects `src/db.ts` to PGlite at module resolution. |
 | `.env` | None exists in this worktree or in `Pawls-preview-fix`. The runner refuses any suite that reads `.env`/`DATABASE_URL`; verified for all four legacy suites (`deletion`, `payments`, `iap-core`, `webhook-core`: "HERMETIC: refusing"). |
-| Email / payment / upload | `RESEND_*`, `STRIPE_*`, `UPLOADTHING_*`, `REVENUECAT_*` and `VERCEL_*` are removed, and `globalThis.fetch` throws. The mailer ran in test mode only. |
+| Email / payment / upload | `RESEND_*`, `STRIPE_*`, `UPLOADTHING_*`, `REVENUECAT_*` and `VERCEL_*` are removed. The mailer ran in test mode only. Network guards are listed in the next section. |
 | Production | Not contacted, except read-only HEAD requests to `https://pawls.club` for finding F1. No accounts were created or deleted, and no writes were made. |
 | Runtime | Node v24.18.0 with `scripts/hermetic-test/bun-test-shim.mjs`. Bun is not installed on this Mac (disk at its 10 GiB floor), so **the suites were not run under Bun**. |
 
 **Command:** `node scripts/hermetic-test/run.mjs`
 
+## What the harness prevents, and what it does not
+
+The earlier version of this document relied on `fetch` being blocked. That alone
+does not stop network access: `node:http`/`https` (the Stripe SDK's
+transport), raw `net`/`tls`, undici, WebSocket (Neon's `Pool`), DNS and child
+processes such as `curl` bypass it. Since `a89d4d6` the runner installs these
+guards **before importing any suite**:
+
+| Path | Guard | Proven by self-check |
+|---|---|---|
+| `globalThis.fetch` | throws | yes |
+| `net.Socket.prototype.connect` (carries `net.connect`, `tls.connect`, `http`/`https` requests, undici, WebSocket-over-TCP) | throws | `net.connect`, `https.request`, `http.request` |
+| `dns.lookup`, `dns.resolve`, `dns.promises.*` | throw | `dns.promises.lookup`, named-import `dns.lookup` |
+| `globalThis.WebSocket` | constructor throws | yes |
+| `child_process.spawn/spawnSync/exec/execSync/execFile/execFileSync/fork` | throw; `syncBuiltinESMExports()` so named imports see it too | `spawn`, named-import `spawn` |
+| Database | `src/db.ts` resolved to in-process PGlite; `DATABASE_URL` is an unroutable sentinel | (module redirection; all DB tests pass on PGlite) |
+| `.env` / network-DB suites | refused before import | the four legacy suites refused |
+
+The run aborts unless every probe is refused. Current output:
+`network guard self-check: 9/9 paths refused`.
+
+**Not prevented (these are in-process JavaScript guards, not OS isolation):**
+- native addons that open sockets themselves;
+- `process.binding('tcp_wrap')`-style internals;
+- `worker_threads` workers, which get fresh builtins (no suite uses them);
+- anything executed before the guards, i.e. the runner's own imports (Node builtins only);
+- filesystem writes (PGlite is in memory; suites write nothing to disk).
+
+For an OS-level guarantee, run it inside a network-less sandbox, e.g.
+`docker run --network none … node scripts/hermetic-test/run.mjs`. That has not been done.
+
+**Not claimed:** no suite was run under native Bun, and nothing was run against
+Neon (real or branch). PGlite is single-connection, so "concurrent" tests
+exercise serialized interleavings, not real row-lock races (see
+`SECURITY_HARDENING_REVIEW.md` §2).
+
 ## Results
 
 | Suite | Result |
 |---|---|
-| `src/lib/auth/security-hardening.test.ts` (new) | 20 / 20 pass |
+| `src/lib/auth/security-hardening.test.ts` (new) | 21 / 21 pass (adds: fresh-migration deletion via `012`, listing-address `mail_log` anonymisation, no raw token in `rate_limits`) |
 | `src/lib/launch-fixes.test.ts` (Phase 2B) | pass |
 | `src/lib/match-ui.test.ts` | pass |
 | `src/lib/seo-titles.test.ts` | pass |
-| **Total** | **75 pass, 0 fail, 0 skip** |
+| **Total** | **76 pass, 0 fail, 0 skip** (2026-10-28, after `a70df02`) |
 
 The baseline at `bfc1eef`, before my changes, was 55 / 55 for the three existing suites.
 

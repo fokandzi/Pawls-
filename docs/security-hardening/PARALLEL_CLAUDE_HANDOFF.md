@@ -33,7 +33,8 @@
 | `booking-api-handler.ts`, `src/lib/booking-emails.ts` | Batch D1/D2 booking work | Medium |
 | `src/lib/auth/deletion.ts` | Security finding #13 (`f52e039`) | Medium: additions only |
 | `match-api-handler.ts` | Messaging | Low |
-| Migration numbering | `010` is used by my unmerged billing branch | Low (filename-tracked) |
+| Migration numbering | `010` is used by my unmerged billing branch; this branch adds `011` and `012` | Low (filename-tracked) |
+| `src/db/migrations/012_dog_profiles_email_drift.sql` | Schema ownership (runtime DDL in `src/db/schema.ts`) | Low: no CTO commit or branch claims it (checked `origin` 2026-10-28); cto.new workspace not visible |
 | `package.json` / `bun.lock` | Any dependency change | Low |
 
 **Not touched, CTO-owned:**
@@ -68,6 +69,14 @@ See `SECURITY_HARDENING_INTEGRATION.md`. In short:
 3. `e93cc35` (auth + migration 011)
 4. `9edf50d` (deletion)
 5. `f482693` (tests)
-6. Docs commit.
-7. Neon branch: audit → migrate → wrap → re-audit.
-8. Owner OK, then production.
+6. `2a66c85` (docs)
+7. `de14d60` (migration 012)
+8. `ea17020` (deletion: listing-address mail)
+9. `a89d4d6` (harness network guards)
+10. `a70df02` (token-hash rate-limit keys)
+11. Final docs commit.
+12. Neon branch: audit → migrate → wrap → re-audit → `BROWSER_TEST_CASES.md`.
+13. Owner OK, then production.
+
+The relay message above was the first version; the current short version is
+in `RELAY_MESSAGE.txt` in the archive.
