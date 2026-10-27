@@ -10,8 +10,23 @@
 //     unroutable sentinel, so a stray neon() call cannot reach a real database;
 //   - src/db.ts is redirected to src/test-support/pglite-db.ts (in-process);
 //   - globalThis.fetch throws, so no email/payment/upload provider is called;
+//   - outbound sockets are refused below fetch too: net.Socket#connect (which
+//     carries http/https/tls/undici and therefore the Stripe SDK and the
+//     WebSocket-based Neon Pool), dns lookups, the global WebSocket, and
+//     child_process spawn/exec (e.g. curl). A self-check proves each guard
+//     fires before any suite is imported;
 //   - a suite that reads .env (the legacy network-DB suites) is refused.
-import { createRequire, registerHooks } from "node:module";
+//
+// These are JavaScript-level guards inside this Node process, NOT OS-level
+// isolation: native addons, raw process.binding() handles, or code that ran
+// before the guards could still open sockets. For a hard guarantee, run the
+// runner inside a network-less sandbox (e.g. `docker run --network none`).
+import { createRequire, registerHooks, syncBuiltinESMExports } from "node:module";
+import net from "node:net";
+import dns from "node:dns";
+import http from "node:http";
+import https from "node:https";
+import childProcess from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -38,6 +53,49 @@ globalThis.require = createRequire(import.meta.url);
 globalThis.fetch = async (input) => {
   throw new Error(`HERMETIC: outbound fetch blocked (${String(input).split("?")[0]})`);
 };
+
+const blocked = (what) => () => {
+  throw new Error(`HERMETIC: ${what} blocked`);
+};
+net.Socket.prototype.connect = blocked("socket connect (net/tls/http/https/undici)");
+dns.lookup = blocked("dns.lookup");
+dns.resolve = blocked("dns.resolve");
+dns.promises.lookup = async () => blocked("dns.promises.lookup")();
+dns.promises.resolve = async () => blocked("dns.promises.resolve")();
+globalThis.WebSocket = class {
+  constructor() {
+    throw new Error("HERMETIC: WebSocket blocked");
+  }
+};
+for (const fn of ["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]) {
+  childProcess[fn] = blocked(`child_process.${fn}`);
+}
+// Make `import { spawn } from "node:child_process"` (named ESM imports) see
+// the patched functions too, not only default-object access.
+syncBuiltinESMExports();
+
+// Self-check: every guarded path must refuse, or the run aborts.
+const probes = {
+  fetch: () => fetch("https://example.com"),
+  "net.connect": () => net.connect(443, "example.com"),
+  "https.request": () => https.request("https://example.com").end(),
+  "http.request": () => http.request("http://example.com").end(),
+  "dns.promises.lookup": () => dns.promises.lookup("example.com"),
+  WebSocket: () => new WebSocket("wss://example.com"),
+  "child_process.spawn": () => childProcess.spawn("curl", ["https://example.com"]),
+  "named-import spawn": async () => (await import("node:child_process")).spawn("curl", ["https://example.com"]),
+  "named-import dns.lookup": async () => (await import("node:dns")).lookup("example.com", () => {}),
+};
+for (const [name, probe] of Object.entries(probes)) {
+  let refused = false;
+  try {
+    await probe();
+  } catch (e) {
+    refused = String(e?.message ?? e).includes("HERMETIC");
+  }
+  if (!refused) throw new Error(`HERMETIC self-check failed: ${name} was not blocked`);
+}
+console.log(`network guard self-check: ${Object.keys(probes).length}/${Object.keys(probes).length} paths refused (${Object.keys(probes).join(", ")})`);
 
 const shimUrl = pathToFileURL(join(here, "bun-test-shim.mjs")).href;
 const dbUrl = pathToFileURL(join(repo, "src", "db.ts")).href;
