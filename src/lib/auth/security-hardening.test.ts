@@ -338,6 +338,34 @@ describe("account deletion", () => {
     expect(o2.email).toBe("bystander@biz.example");
   });
 
+  test("fresh migrations alone support deletion (012 fixes dog_profiles.email drift)", async () => {
+    // Without 012 the column is absent on a migrations-only database...
+    const { PGlite } = await import("@electric-sql/pglite");
+    const bare = new PGlite();
+    const dir = join(import.meta.dirname, "..", "..", "db", "migrations");
+    const { readdirSync } = await import("node:fs");
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".sql") && x < "012").sort()) {
+      const text = readFileSync(join(dir, f), "utf8").split("\n").filter((l) => !/^\s*--/.test(l)).join("\n");
+      for (const s of text.split(";").map((x) => x.trim()).filter(Boolean)) await bare.query(s);
+    }
+    let missing = false;
+    try {
+      await bare.query("SELECT email FROM dog_profiles LIMIT 1");
+    } catch {
+      missing = true;
+    }
+    expect(missing).toBe(true);
+    await bare.close();
+
+    // ...and with every migration (no harness patch) deletion removes a legacy
+    // email-matched dog and succeeds.
+    const addr = email("legacy-dog");
+    const uid = await insertUser(addr, { verified: true });
+    const [dog] = await q`INSERT INTO dog_profiles (email) VALUES (${addr}) RETURNING id`;
+    expect((await deletion.deleteUserAccount({ id: uid, email: addr } as any)).ok).toBe(true);
+    expect(await q`SELECT 1 FROM dog_profiles WHERE id = ${dog.id}`).toHaveLength(0);
+  });
+
   test("a deleted user's session cannot delete again (401)", async () => {
     const addr = email("twice");
     const uid = await insertUser(addr, { verified: true });

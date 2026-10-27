@@ -73,12 +73,6 @@ export function migrate(): Promise<void> {
           await pg.query(stmt);
         }
       }
-      // Schema drift: columns production has (created by runtime DDL in
-      // src/db/schema.ts) that NO migration creates. Without them a
-      // migrations-only database fails account deletion (deletion.ts reads
-      // dog_profiles.email). Reported in docs/security-hardening/; mirrored here
-      // so the suite matches the production shape.
-      await pg.query("ALTER TABLE dog_profiles ADD COLUMN IF NOT EXISTS email TEXT");
     })();
   }
   return migrated;
