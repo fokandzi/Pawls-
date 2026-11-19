@@ -64,12 +64,12 @@ function safeNext(raw: string): string | null {
   return raw;
 }
 
-function fail(
+async function fail(
   request: Request,
   failure: PhotoFailure,
   code: string,
   links: AuthPageLink[],
-): Response {
+): Promise<Response> {
   console.error(`[dog-photo] ${code} (${failure.status}): ${failure.log}`);
   if (wantsHtml(request)) {
     return errorPage(request, {
@@ -80,7 +80,7 @@ function fail(
     });
   }
   return json(
-    { ok: false, error: code, message: t(failure.bodyKey, pageLang(request)) },
+    { ok: false, error: code, message: t(failure.bodyKey, await pageLang(request)) },
     failure.status,
   );
 }

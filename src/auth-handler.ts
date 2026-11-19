@@ -73,7 +73,7 @@ const SETTINGS_LINKS = [
 ];
 
 /** CSRF failure — same FR-first page everywhere in the auth flow. */
-function blockedResponse(request: Request, links = NAV_HOME_LOGIN): Response {
+async function blockedResponse(request: Request, links = NAV_HOME_LOGIN): Promise<Response> {
   return errorPage(request, {
     titleKey: "auth.err.blocked",
     bodyKey: "auth.err.blockedBody",
@@ -82,7 +82,7 @@ function blockedResponse(request: Request, links = NAV_HOME_LOGIN): Response {
   });
 }
 /** Uncontrolled-failure page (never a bare 500 with no way back). */
-function serverErrorResponse(request: Request, links = NAV_HOME_LOGIN): Response {
+async function serverErrorResponse(request: Request, links = NAV_HOME_LOGIN): Promise<Response> {
   return errorPage(request, {
     titleKey: "auth.err.serverTitle",
     bodyKey: "auth.err.serverBody",
