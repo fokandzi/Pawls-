@@ -123,6 +123,9 @@ export const en: Record<string, string> = {
   "msg.placeholder": "Type a message…",
   "msg.send": "Send",
   "msg.sendFailed": "Couldn't send your message. Please try again.",
+  // Batch F1: a dedicated line for the message-send rate limit (429) instead of
+  // the generic "couldn't send" — the typed text is preserved.
+  "msg.tooMany": "Too many messages at once — wait a moment, then try again. Your message is still here.",
   "msg.loadFailed": "Couldn't load the conversation. Please try again.",
   "msg.backToConversations": "← Back to conversations",
   "msg.unread": "unread",
@@ -233,6 +236,12 @@ export const en: Record<string, string> = {
   "auth.verify.verify": "Verify",
   "auth.verify.registerInstead": "Register instead",
   "auth.verify.logIn": "Log in",
+  // Batch F1: the resend form on /verify-email — the page no longer sends an
+  // existing unverified user back to /register.
+  "auth.verify.resendHeading": "Didn't get the link?",
+  "auth.verify.resendBody": "Enter your email address and we'll send you a new verification link.",
+  "auth.verify.resendPlaceholder": "Your email address",
+  "auth.verify.resendButton": "Resend the link",
 
   "auth.forgot.seoTitle": "Reset your password — Pawls",
   "auth.forgot.seoDesc": "Request a password reset link for your Pawls account.",
@@ -330,6 +339,13 @@ export const en: Record<string, string> = {
   "auth.resend.alreadyVerifiedBody": "The address {email} is already verified. You can log in.",
   "auth.resend.noEmailTitle": "No email sent",
   "auth.resend.noEmailBody": "No email was sent to {email}: email delivery is not configured in this environment.",
+  // Public resend form on /verify-email (Batch F1) — conditional wording: it
+  // never asserts that a specific address received mail.
+  "auth.resend.requestSentTitle": "Verification link",
+  "auth.resend.requestSentBody": "If an unverified account exists for {email}, a verification link will be sent to it shortly (valid for 24 hours). Check your spam folder too.",
+  "auth.resend.requestNoEmailTitle": "No email can be sent yet",
+  "auth.resend.requestNoEmailBody": "Email delivery is not configured in this environment yet, so no verification link can be sent — whatever the address. You can keep using Pawls.",
+  "auth.resend.requestBadEmailBody": "Enter a valid email address to receive a new verification link.",
 
   // Waitlist (landing page) — honest failure states
   "home.waitlistErrTitle": "Sign-up failed for now",
@@ -826,6 +842,7 @@ export const en: Record<string, string> = {
   "myBookings.notice.FORBIDDEN": "This booking is not yours.",
   "myBookings.notice.BOOKING_NOT_FOUND": "Booking not found.",
   "myBookings.notice.DB_UNAVAILABLE": "We couldn't reach the database — nothing was changed.",
+  "myBookings.notice.RATE_LIMITED": "Too many booking requests in a short time — nothing was changed. Wait a moment, then try again.",
 
   // /book/provider
   "providerSpace.seoTitle": "Provider space — Pawls",

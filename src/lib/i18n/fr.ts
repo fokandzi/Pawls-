@@ -123,6 +123,9 @@ export const fr: Record<string, string> = {
   "msg.placeholder": "Écrivez un message…",
   "msg.send": "Envoyer",
   "msg.sendFailed": "Impossible d'envoyer le message. Réessayez.",
+  // Lot F1 : ligne dédiée à la limite d'envoi (429) au lieu du message générique
+  // — le texte saisi est conservé.
+  "msg.tooMany": "Trop de messages envoyés d'un coup — patientez un instant puis réessayez. Votre message est conservé.",
   "msg.loadFailed": "Impossible de charger la conversation. Réessayez.",
   "msg.backToConversations": "← Retour aux conversations",
   "msg.unread": "non lu",
@@ -233,6 +236,12 @@ export const fr: Record<string, string> = {
   "auth.verify.verify": "Vérifier",
   "auth.verify.registerInstead": "S'inscrire à la place",
   "auth.verify.logIn": "Se connecter",
+  // Lot F1 : formulaire de renvoi sur /verify-email — la page ne renvoie plus un
+  // utilisateur non vérifié vers /register.
+  "auth.verify.resendHeading": "Vous n'avez pas reçu le lien ?",
+  "auth.verify.resendBody": "Indiquez votre adresse email et nous vous enverrons un nouveau lien de vérification.",
+  "auth.verify.resendPlaceholder": "Votre adresse email",
+  "auth.verify.resendButton": "Renvoyer le lien",
 
   "auth.forgot.seoTitle": "Réinitialisez votre mot de passe — Pawls",
   "auth.forgot.seoDesc": "Demandez un lien de réinitialisation de mot de passe pour votre compte Pawls.",
@@ -329,6 +338,13 @@ export const fr: Record<string, string> = {
   "auth.resend.alreadyVerifiedBody": "L'adresse {email} est déjà vérifiée. Vous pouvez vous connecter.",
   "auth.resend.noEmailTitle": "Aucun email envoyé",
   "auth.resend.noEmailBody": "Aucun email n'a été envoyé à {email} : l'envoi d'emails n'est pas configuré dans cet environnement.",
+  // Formulaire public de renvoi sur /verify-email (lot F1) — formulation
+  // conditionnelle : elle n'affirme jamais qu'une adresse précise a reçu un email.
+  "auth.resend.requestSentTitle": "Lien de vérification",
+  "auth.resend.requestSentBody": "Si un compte non vérifié existe pour {email}, un lien de vérification lui sera envoyé dans les prochaines minutes (valable 24 heures). Pensez à vérifier vos spams.",
+  "auth.resend.requestNoEmailTitle": "Aucun email ne peut être envoyé pour l'instant",
+  "auth.resend.requestNoEmailBody": "L'envoi d'emails n'est pas encore configuré dans cet environnement : aucun lien de vérification ne peut être envoyé, quelle que soit l'adresse. Vous pouvez continuer à utiliser Pawls.",
+  "auth.resend.requestBadEmailBody": "Indiquez une adresse email valide pour recevoir un nouveau lien de vérification.",
 
   // Waitlist (landing page) — honest failure states
   "home.waitlistErrTitle": "Inscription impossible pour le moment",
@@ -858,6 +874,7 @@ export const fr: Record<string, string> = {
   "myBookings.notice.FORBIDDEN": "Cette réservation n'est pas la vôtre.",
   "myBookings.notice.BOOKING_NOT_FOUND": "Réservation introuvable.",
   "myBookings.notice.DB_UNAVAILABLE": "Nous n'avons pas pu joindre la base de données — rien n'a été modifié.",
+  "myBookings.notice.RATE_LIMITED": "Trop de demandes de réservation en peu de temps — rien n'a été modifié. Patientez un instant, puis réessayez.",
 
   // /book/provider — provider space
   "providerSpace.seoTitle": "Espace prestataire — Pawls",

@@ -29,8 +29,10 @@ type Session = typeof import("./session");
 type Auth = typeof import("../../auth-handler");
 type Mailer = typeof import("./mailer");
 type Safety = typeof import("../../../safety-api-handler");
+type Booking = typeof import("../../../booking-api-handler");
+type Match = typeof import("../../../match-api-handler");
 
-let hash: Hash, tokens: Tokens, legacy: Legacy, rl: RL, deletion: Deletion, session: Session, auth: Auth, mailer: Mailer, safety: Safety;
+let hash: Hash, tokens: Tokens, legacy: Legacy, rl: RL, deletion: Deletion, session: Session, auth: Auth, mailer: Mailer, safety: Safety, booking: Booking, match: Match;
 let seq = 0;
 const email = (tag: string) => `${tag}-${++seq}@hermetic.example`;
 
@@ -69,6 +71,8 @@ beforeAll(async () => {
   auth = await import("../../auth-handler");
   mailer = await import("./mailer");
   safety = await import("../../../safety-api-handler");
+  booking = await import("../../../booking-api-handler");
+  match = await import("../../../match-api-handler");
 });
 
 // ── 1. Email tokens ─────────────────────────────────────────────────────────
@@ -382,5 +386,188 @@ describe("account deletion", () => {
     expect(first.status).toBe(302);
     const again = await auth.handleAuthPost(post("/auth/delete-account", { confirmEmail: addr, confirm: "1" }, cookie));
     expect(again.status).toBe(401);
+  });
+});
+
+// ── 5. Batch F1: no-JS booking rate limit reaches the page (F1-1) ────────────
+describe("booking 429 no-JS path (F1-1)", () => {
+  test("11th form post gets 303 → /book/my-bookings?error=RATE_LIMITED", async () => {
+    const me = await insertUser(email("booking-rl"), { verified: true });
+    const cookie = await cookieFor(me);
+    // Exhaust the 10/hour booking-create bucket for this user.
+    for (let i = 0; i < 10; i++) expect((await rl.rateLimit("booking-create", `u${me}`)).limited).toBe(false);
+    const res = await booking.handleBookingApi(
+      new Request(`${SITE}/api/bookings`, {
+        method: "POST",
+        headers: {
+          Origin: SITE,
+          Accept: "text/html",
+          "x-forwarded-for": "203.0.113.11",
+          "Content-Type": "application/x-www-form-urlencoded",
+          Cookie: cookie,
+        },
+        body: "providerId=1&serviceId=1&date=2026-12-01&time=10:00",
+      }),
+    );
+    expect(res.status).toBe(303);
+    // The exact query string /book/my-bookings accepts as a notice code.
+    expect(res.headers.get("location")).toBe("/book/my-bookings?error=RATE_LIMITED");
+  });
+});
+
+// ── 6. Batch F1: public resend-verification form (F1-2) ──────────────────────
+describe("public resend-verification request (F1-2)", () => {
+  let ipSeq = 0;
+  const resendPost = (addr: string, headers: Record<string, string> = {}) => {
+    const body = new FormData();
+    body.set("email", addr);
+    return auth.handleAuthPost(
+      new Request(`${SITE}/auth/resend-verification-request`, {
+        method: "POST",
+        headers: { Origin: SITE, "x-forwarded-for": `198.51.100.${++ipSeq}`, ...headers },
+        body,
+      }),
+    );
+  };
+  const tokenCount = async (userId: number) =>
+    Number((await q`SELECT count(*)::int AS n FROM email_tokens WHERE user_id = ${userId}`)[0].n);
+
+  test("no mail configured: the same honest page for unknown, unverified and verified addresses", async () => {
+    const unverified = await insertUser(email("resend-unverified"), { verified: false });
+    const verified = await insertUser(email("resend-verified"), { verified: true });
+    const [uAddr] = await q`SELECT email FROM users WHERE id = ${unverified}`;
+    const [vAddr] = await q`SELECT email FROM users WHERE id = ${verified}`;
+
+    const unknown = await resendPost("nobody-here@hermetic.example");
+    const realUnverified = await resendPost(String(uAddr.email));
+    const realVerified = await resendPost(String(vAddr.email));
+    const bodies = [await unknown.text(), await realUnverified.text(), await realVerified.text()];
+
+    expect([unknown.status, realUnverified.status, realVerified.status]).toEqual([200, 200, 200]);
+    // Byte-identical: the answer cannot be used to test whether an address exists.
+    expect(new Set(bodies).size).toBe(1);
+    expect(bodies[0]).toContain("quelle que soit l");
+    // Nothing was minted: this environment cannot deliver, so no link is issued.
+    expect(await tokenCount(unverified)).toBe(0);
+  });
+
+  test("mail configured but the provider is unreachable: still no existence oracle, and a link WAS issued", async () => {
+    // Same address, twice: once before it has an account, once after. The page
+    // echoes the submitted address, so this is the only fair comparison.
+    const addr = email("resend-prod-later");
+    process.env.RESEND_API_KEY = "re_hermetic_never_used";
+    try {
+      const before = await resendPost(addr);
+      const beforeBody = await before.text();
+      const unverified = await insertUser(addr, { verified: false });
+      const after = await resendPost(addr);
+      const afterBody = await after.text();
+
+      expect([before.status, after.status]).toEqual([200, 200]);
+      // Same page whether or not the account exists — no existence oracle even
+      // while the provider is down.
+      expect(afterBody).toBe(beforeBody);
+      expect(afterBody).toContain("Si un compte non vérifié existe");
+      // The real unverified address went through the ONE issuance path…
+      expect(await tokenCount(unverified)).toBe(1);
+    } finally {
+      delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  test("cross-site POST is refused (CSRF) and mints nothing", async () => {
+    const unverified = await insertUser(email("resend-csrf"), { verified: false });
+    const [uAddr] = await q`SELECT email FROM users WHERE id = ${unverified}`;
+    const res = await resendPost(String(uAddr.email), { Origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    expect(await tokenCount(unverified)).toBe(0);
+  });
+
+  test("an invalid address is a 400, never a send", async () => {
+    const res = await resendPost("not-an-address");
+    expect(res.status).toBe(400);
+  });
+
+  test("its own bucket: the 6th request from one IP is 429 with Retry-After", async () => {
+    const ip = { "x-forwarded-for": "198.51.100.250" };
+    for (let i = 0; i < 5; i++) {
+      const ok = await auth.handleAuthPost(
+        new Request(`${SITE}/auth/resend-verification-request`, {
+          method: "POST",
+          headers: { Origin: SITE, ...ip },
+          body: (() => {
+            const b = new FormData();
+            b.set("email", `flood-${i}@hermetic.example`);
+            return b;
+          })(),
+        }),
+      );
+      expect(ok.status).toBe(200);
+    }
+    const over = await auth.handleAuthPost(
+      new Request(`${SITE}/auth/resend-verification-request`, {
+        method: "POST",
+        headers: { Origin: SITE, ...ip },
+        body: (() => {
+          const b = new FormData();
+          b.set("email", "flood-final@hermetic.example");
+          return b;
+        })(),
+      }),
+    );
+    expect(over.status).toBe(429);
+    expect(Number(over.headers.get("Retry-After"))).toBeGreaterThan(0);
+    // The bucket is its own: the session-guarded resend is untouched.
+    expect((await rl.rateLimit("resend-verification", "198.51.100.250")).count).toBe(1);
+  });
+});
+
+// ── 7. Batch F1: messaging 429 copy (F1-3) ───────────────────────────────────
+describe("messaging rate-limit copy (F1-3)", () => {
+  test("the 429 body carries FR copy and Retry-After (shared helper)", async () => {
+    const me = await insertUser(email("rl-429"), { verified: true });
+    const cookie = await cookieFor(me);
+    // Exhaust the conversation-start bucket; it answers through the same
+    // rateLimited() helper as message-send.
+    for (let i = 0; i < 20; i++) expect((await rl.rateLimit("conversation-start", `u${me}`)).limited).toBe(false);
+    const res = await match.handleMatchApi(
+      jsonPost("/api/match/conversations/start", { otherUserId: 1 }, cookie),
+    );
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as { error: string; message: string; messageFr: string };
+    expect(body.error).toBe("RATE_LIMITED");
+    expect(body.messageFr).toContain("réessayez");
+    expect(body.messageFr).not.toBe(body.message);
+    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
+  });
+});
+
+// ── 8. Batch F1: message-send quota policy (F1-4) ────────────────────────────
+describe("message-send quota policy (F1-4)", () => {
+  test("a not-found conversation costs no budget (404, bucket untouched)", async () => {
+    const me = await insertUser(email("quota-404"), { verified: true });
+    const cookie = await cookieFor(me);
+    for (let i = 0; i < 5; i++) {
+      const res = await match.handleMatchApi(
+        jsonPost("/api/match/conversations/999999/messages", { body: "bonjour" }, cookie),
+      );
+      expect(res.status).toBe(404);
+    }
+    const rows = await q`SELECT count FROM rate_limits WHERE action = 'message-send' AND key = ${`u${me}`}`;
+    // Before F1-4 these five 404s burned five sends of the user's 60/10min.
+    expect(rows).toHaveLength(0);
+  });
+
+  test("the counter saturates at limit+1: rejections no longer run away", async () => {
+    const key = `u${await insertUser(email("quota-sat"), { verified: true })}`;
+    for (let i = 0; i < 60; i++) expect((await rl.rateLimit("message-send", key)).limited).toBe(false);
+    const first = await rl.rateLimit("message-send", key);
+    expect(first.limited).toBe(true);
+    expect(first.count).toBe(61);
+    for (let i = 0; i < 5; i++) expect((await rl.rateLimit("message-send", key)).limited).toBe(true);
+    const [row] = await q`SELECT count FROM rate_limits WHERE action = 'message-send' AND key = ${key}`;
+    // Was 62, 63, … for every rejected request; now one rejection is recorded once.
+    expect(Number(row.count)).toBe(61);
+    expect(first.retryAfterSeconds).toBeGreaterThan(0);
   });
 });

@@ -90,6 +90,11 @@ const NOTICE_CODES = [
   "FORBIDDEN",
   "BOOKING_NOT_FOUND",
   "DB_UNAVAILABLE",
+  // Batch F1: a no-JS booking POST that hits the 10/hour booking-create bucket
+  // is answered with a 303 to /book/my-bookings?error=RATE_LIMITED
+  // (booking-api-handler.ts coreError). Without this entry the redirect landed
+  // on a page with NO notice at all — the limit was silently swallowed.
+  "RATE_LIMITED",
 ] as const;
 
 function fill(template: string, vars: Record<string, string | number>): string {
