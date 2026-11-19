@@ -9,9 +9,12 @@
  * user's form input and offered no way back.
  *
  * These helpers render the same page in the site's language model:
- *   - FR primary (the product default), EN still available through the
- *     visitor's `Accept-Language` primary tag, resolved with the EXISTING
- *     i18n dictionary (`t()` from src/lib/i18n) — no new string system.
+ *   - The SAME language resolution as every route (src/lib/i18n/route-lang.ts):
+ *     FR primary (the product default), EN only for a signed-in visitor whose
+ *     persisted users.preferred_language is "en", resolved with the EXISTING
+ *     i18n dictionary (`t()` from src/lib/i18n) — no new string system. This
+ *     layer used to read Accept-Language instead, so a browser set to en-US got
+ *     an ENGLISH result page right after a FRENCH form (batch F1 resend fix).
  *   - Every page carries a visible recovery route (back to home / login /
  *     register / password reset), including the 429 rate-limit page.
  *   - Validation errors re-render the register form with the submitted
@@ -20,7 +23,8 @@
  * Styling is inline on purpose: this layer runs before SSR, so Tailwind class
  * names would not be guaranteed to exist in the shipped stylesheet.
  */
-import { t, DEFAULT_LANG, langFromLocale, type Lang } from "../i18n";
+import { t, DEFAULT_LANG, normalizeLang, type Lang } from "../i18n";
+import { getSessionUser } from "./session";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../password-policy";
 
 const NO_STORE = "no-store, max-age=0, must-revalidate";
@@ -31,11 +35,16 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-/** FR primary: default 'fr', EN when the visitor's browser explicitly asks. */
-export function pageLang(request: Request): Lang {
+/**
+ * FR primary, EN only when the SIGNED-IN visitor's persisted preference is EN.
+ * Mirrors resolveRequestLang (the routes), so a form and its result page always
+ * agree. Never throws and never reads Accept-Language: a broken session or an
+ * unreachable DB falls back to FR, never to a different language.
+ */
+export async function pageLang(request: Request): Promise<Lang> {
   try {
-    const primary = (request.headers.get("accept-language") ?? "").split(",")[0]?.trim() ?? "";
-    return langFromLocale(primary);
+    const user = await getSessionUser(request);
+    return normalizeLang(user?.preferredLanguage ?? null);
   } catch {
     return DEFAULT_LANG;
   }
@@ -109,8 +118,8 @@ export interface ErrorPageOptions {
 }
 
 /** Honest, FR-first error page with a visible recovery route. */
-export function errorPage(request: Request, opts: ErrorPageOptions): Response {
-  const lang = pageLang(request);
+export async function errorPage(request: Request, opts: ErrorPageOptions): Promise<Response> {
+  const lang = await pageLang(request);
   const inner = `<p style="margin:0;font-size:15px;line-height:1.6;color:#5b5249">${escapeHtml(
     fill(t(opts.bodyKey, lang), opts.bodyArgs ?? {}),
   )}</p>${opts.extraHtml ?? ""}${linksHtml(lang, opts.links ?? NAV_HOME_LOGIN)}`;
@@ -126,8 +135,8 @@ export function errorPage(request: Request, opts: ErrorPageOptions): Response {
  * the visitor how long to wait and — unlike the previous version — always
  * offers routes back into the product.
  */
-export function rateLimitPage(request: Request, retryAfterSeconds: number): Response {
-  const lang = pageLang(request);
+export async function rateLimitPage(request: Request, retryAfterSeconds: number): Promise<Response> {
+  const lang = await pageLang(request);
   const inner = `<p style="margin:0;font-size:15px;line-height:1.6;color:#5b5249">${escapeHtml(
     fill(t("auth.err.tooManyBody", lang), { seconds: Math.max(1, Math.ceil(retryAfterSeconds)) }),
   )}</p>
@@ -156,8 +165,8 @@ export interface NoticePageOptions {
 }
 
 /** Success / informational page (FR-first). */
-export function noticePage(request: Request, opts: NoticePageOptions): Response {
-  const lang = pageLang(request);
+export async function noticePage(request: Request, opts: NoticePageOptions): Promise<Response> {
+  const lang = await pageLang(request);
   const notice = opts.noticeKey
     ? `<p style="margin:12px 0 0;padding:10px 12px;border-radius:10px;background:#fdf3e3;border:1px solid #f0dcbd;font-size:14px;line-height:1.5;color:#8a5a12">${escapeHtml(
         fill(t(opts.noticeKey, lang), opts.bodyArgs ?? {}),
@@ -193,8 +202,8 @@ const INPUT_STYLE =
  * first, with the submitted name / email / date of birth preserved. The
  * password is NEVER echoed back (and is marked as needing to be re-entered).
  */
-export function registerFormPage(request: Request, opts: RegisterFormOptions): Response {
-  const lang = pageLang(request);
+export async function registerFormPage(request: Request, opts: RegisterFormOptions): Promise<Response> {
+  const lang = await pageLang(request);
   const maxDob = new Date(Date.now() - 16 * 365.25 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   const banner = `<div style="margin:0 0 4px;padding:10px 12px;border-radius:10px;background:#fdeceb;border:1px solid #f6c9c4;font-size:14px;line-height:1.5;color:#a4361f">${
     opts.errorTitleKey
