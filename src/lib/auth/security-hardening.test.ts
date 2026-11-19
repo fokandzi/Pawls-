@@ -412,3 +412,110 @@ describe("booking 429 no-JS path (F1-1)", () => {
     expect(res.headers.get("location")).toBe("/book/my-bookings?error=RATE_LIMITED");
   });
 });
+
+// ── 6. Batch F1: public resend-verification form (F1-2) ──────────────────────
+describe("public resend-verification request (F1-2)", () => {
+  let ipSeq = 0;
+  const resendPost = (addr: string, headers: Record<string, string> = {}) => {
+    const body = new FormData();
+    body.set("email", addr);
+    return auth.handleAuthPost(
+      new Request(`${SITE}/auth/resend-verification-request`, {
+        method: "POST",
+        headers: { Origin: SITE, "x-forwarded-for": `198.51.100.${++ipSeq}`, ...headers },
+        body,
+      }),
+    );
+  };
+  const tokenCount = async (userId: number) =>
+    Number((await q`SELECT count(*)::int AS n FROM email_tokens WHERE user_id = ${userId}`)[0].n);
+
+  test("no mail configured: the same honest page for unknown, unverified and verified addresses", async () => {
+    const unverified = await insertUser(email("resend-unverified"), { verified: false });
+    const verified = await insertUser(email("resend-verified"), { verified: true });
+    const [uAddr] = await q`SELECT email FROM users WHERE id = ${unverified}`;
+    const [vAddr] = await q`SELECT email FROM users WHERE id = ${verified}`;
+
+    const unknown = await resendPost("nobody-here@hermetic.example");
+    const realUnverified = await resendPost(String(uAddr.email));
+    const realVerified = await resendPost(String(vAddr.email));
+    const bodies = [await unknown.text(), await realUnverified.text(), await realVerified.text()];
+
+    expect([unknown.status, realUnverified.status, realVerified.status]).toEqual([200, 200, 200]);
+    // Byte-identical: the answer cannot be used to test whether an address exists.
+    expect(new Set(bodies).size).toBe(1);
+    expect(bodies[0]).toContain("quelle que soit l");
+    // Nothing was minted: this environment cannot deliver, so no link is issued.
+    expect(await tokenCount(unverified)).toBe(0);
+  });
+
+  test("mail configured but the provider is unreachable: still no existence oracle, and a link WAS issued", async () => {
+    // Same address, twice: once before it has an account, once after. The page
+    // echoes the submitted address, so this is the only fair comparison.
+    const addr = email("resend-prod-later");
+    process.env.RESEND_API_KEY = "re_hermetic_never_used";
+    try {
+      const before = await resendPost(addr);
+      const beforeBody = await before.text();
+      const unverified = await insertUser(addr, { verified: false });
+      const after = await resendPost(addr);
+      const afterBody = await after.text();
+
+      expect([before.status, after.status]).toEqual([200, 200]);
+      // Same page whether or not the account exists — no existence oracle even
+      // while the provider is down.
+      expect(afterBody).toBe(beforeBody);
+      expect(afterBody).toContain("Si un compte non vérifié existe");
+      // The real unverified address went through the ONE issuance path…
+      expect(await tokenCount(unverified)).toBe(1);
+    } finally {
+      delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  test("cross-site POST is refused (CSRF) and mints nothing", async () => {
+    const unverified = await insertUser(email("resend-csrf"), { verified: false });
+    const [uAddr] = await q`SELECT email FROM users WHERE id = ${unverified}`;
+    const res = await resendPost(String(uAddr.email), { Origin: "https://evil.example" });
+    expect(res.status).toBe(403);
+    expect(await tokenCount(unverified)).toBe(0);
+  });
+
+  test("an invalid address is a 400, never a send", async () => {
+    const res = await resendPost("not-an-address");
+    expect(res.status).toBe(400);
+  });
+
+  test("its own bucket: the 6th request from one IP is 429 with Retry-After", async () => {
+    const ip = { "x-forwarded-for": "198.51.100.250" };
+    for (let i = 0; i < 5; i++) {
+      const ok = await auth.handleAuthPost(
+        new Request(`${SITE}/auth/resend-verification-request`, {
+          method: "POST",
+          headers: { Origin: SITE, ...ip },
+          body: (() => {
+            const b = new FormData();
+            b.set("email", `flood-${i}@hermetic.example`);
+            return b;
+          })(),
+        }),
+      );
+      expect(ok.status).toBe(200);
+    }
+    const over = await auth.handleAuthPost(
+      new Request(`${SITE}/auth/resend-verification-request`, {
+        method: "POST",
+        headers: { Origin: SITE, ...ip },
+        body: (() => {
+          const b = new FormData();
+          b.set("email", "flood-final@hermetic.example");
+          return b;
+        })(),
+      }),
+    );
+    expect(over.status).toBe(429);
+    expect(Number(over.headers.get("Retry-After"))).toBeGreaterThan(0);
+    // The bucket is its own: the session-guarded resend is untouched.
+    expect((await rl.rateLimit("resend-verification", "198.51.100.250")).count).toBe(1);
+  });
+});

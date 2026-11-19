@@ -109,6 +109,10 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     // rate-limited, honest about whether an email was actually sent.
     case "/api/auth/resend-verification":
     case "/auth/resend-verification": return handleResendVerification(request);
+    // Public resend form on /verify-email (Batch F1): no session required, and
+    // the answer never reveals whether the address has an account.
+    case "/auth/resend-verification-request":
+    case "/api/auth/resend-verification-request": return handleResendVerificationRequest(request);
     case "/auth/me": return handleMe(request);
     default: return jsonResponse({ error: "Not found" }, 404);
   }
@@ -441,6 +445,93 @@ export async function handleResendVerification(request: Request): Promise<Respon
       bodyKey: "auth.err.serverBody",
       status: 500,
       links,
+    });
+  }
+}
+
+// ---- resend verification (public, non-enumerating) --------------------------
+/**
+ * POST /auth/resend-verification-request — Batch F1.
+ *
+ * For an unverified visitor with NO session (the link expired, they switched
+ * device, or the cookie is gone). Until now the only way to obtain a fresh link
+ * was to REGISTER AGAIN, and /verify-email offered « S'inscrire à la place » as
+ * the only escape — a dead end that also risked a duplicate-account mess. This
+ * reuses the ONE issuance path (sendVerificationFor, same as register and the
+ * session-guarded resend) so there is still a single place that mints links.
+ *
+ * Non-enumerating by construction:
+ *   - the answer is the same page for an unknown address, an already-verified
+ *     address and a real unverified one — the copy is CONDITIONAL ("si un compte
+ *     non vérifié existe…") and never asserts that this address received mail;
+ *   - "email is not configured here" is an ENVIRONMENT fact, so it gets its own
+ *     page for EVERY address (today: no RESEND_API_KEY anywhere);
+ *   - a provider delivery failure is logged server-side and still answered with
+ *     the same conditional page, so it cannot be used as an existence oracle.
+ * CSRF-checked, and rate-limited in its own bucket per IP *and* per address
+ * (5/hour each) because this endpoint sends mail to an address the caller chose.
+ */
+export async function handleResendVerificationRequest(request: Request): Promise<Response> {
+  const csrf = assertSameOrigin(request);
+  if (!csrf.ok) return blockedResponse(request, VERIFY_LINKS);
+  let email = "";
+  try {
+    const form = await request.formData();
+    email = formValue(form, "email").toLowerCase().slice(0, 320);
+  } catch {
+    return errorPage(request, {
+      titleKey: "auth.err.badRequest",
+      bodyKey: "auth.err.badRequestBody",
+      status: 400,
+      links: VERIFY_LINKS,
+    });
+  }
+  if (!EMAIL_RE.test(email)) {
+    return errorPage(request, {
+      titleKey: "auth.err.checkDetails",
+      bodyKey: "auth.resend.requestBadEmailBody",
+      status: 400,
+      links: VERIFY_LINKS,
+    });
+  }
+  const ipLimit = await rateLimit("resend-verification-request", clientIp(request));
+  if (ipLimit.limited) return rateLimitPage(request, ipLimit.retryAfterSeconds);
+  const addrLimit = await rateLimit("resend-verification-request", `email:${email}`);
+  if (addrLimit.limited) return rateLimitPage(request, addrLimit.retryAfterSeconds);
+
+  if (!emailConfigured()) {
+    // Honest, and identical for every address: nothing can leave this server.
+    return noticePage(request, {
+      titleKey: "auth.resend.requestNoEmailTitle",
+      bodyKey: "auth.resend.requestNoEmailBody",
+      links: VERIFY_LINKS,
+    });
+  }
+  try {
+    await ensureAuthTables();
+    const rows = await sql()`
+      SELECT id, email, email_verified_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1
+    ` as any;
+    const existing = rows[0] as { id: number; email: string; email_verified_at: string | null } | undefined;
+    if (existing && !existing.email_verified_at) {
+      const outcome = await sendVerificationFor(Number(existing.id), existing.email);
+      // Never turned into a response difference (see the doc comment): the
+      // visitor sees the same conditional page either way.
+      if (outcome.failed) console.error(`[auth] resend-verification-request: delivery failed for user ${existing.id}`);
+    }
+    return noticePage(request, {
+      titleKey: "auth.resend.requestSentTitle",
+      bodyKey: "auth.resend.requestSentBody",
+      bodyArgs: { email },
+      links: VERIFY_LINKS,
+    });
+  } catch (err) {
+    console.error("[auth] resend verification request failed", err);
+    return errorPage(request, {
+      titleKey: "auth.err.serverTitle",
+      bodyKey: "auth.err.serverBody",
+      status: 500,
+      links: VERIFY_LINKS,
     });
   }
 }

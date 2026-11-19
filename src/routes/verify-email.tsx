@@ -42,9 +42,39 @@ function VerifyEmailPage() {
             </>
           )}
           <p className="mt-6 text-sm text-gray-500">
-            <Link to="/register" className="font-medium text-[var(--pawls-terracotta-500)] underline">{t("auth.verify.registerInstead", L)}</Link> ·{" "}
             <Link to="/login" className="font-medium text-[var(--pawls-terracotta-500)] underline">{t("auth.verify.logIn", L)}</Link>
           </p>
+
+          {/* Batch F1: a native (no-JS) resend form. Before this, an unverified
+              visitor whose link expired had exactly one escape — « S'inscrire à
+              la place » → /register, i.e. register a second time. This posts to
+              /auth/resend-verification-request, which re-issues a link through
+              the same path as register and answers identically whether or not
+              the address has an account. */}
+          <div className="mt-10 rounded-2xl border border-[var(--pawls-cream-200)] bg-white p-6 text-left shadow-lg">
+            <h2 className="text-base font-bold text-gray-900">{t("auth.verify.resendHeading", L)}</h2>
+            <p className="mt-1 text-sm text-gray-600">{t("auth.verify.resendBody", L)}</p>
+            <form action="/auth/resend-verification-request" method="POST" className="mt-4">
+              <label htmlFor="resend-email" className="sr-only">
+                {t("auth.verify.resendPlaceholder", L)}
+              </label>
+              <input
+                id="resend-email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder={t("auth.verify.resendPlaceholder", L)}
+                className="w-full rounded-full border border-[var(--pawls-cream-200)] bg-white px-5 py-3 text-gray-900 placeholder:text-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/30"
+              />
+              <button
+                type="submit"
+                className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-[var(--pawls-terracotta-700)]"
+              >
+                {t("auth.verify.resendButton", L)}
+              </button>
+            </form>
+          </div>
         </div>
       </section>
       <AppFooter />

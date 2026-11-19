@@ -43,6 +43,9 @@ export const WINDOWS: Record<string, number> = {
   "reset-token": 60 * 60,
   "reset-request": 60 * 60,
   "resend-verification": 60 * 60,
+  // Batch F1: the PUBLIC resend form on /verify-email (no session). Its own
+  // bucket so it cannot be confused with the session-guarded resend.
+  "resend-verification-request": 60 * 60,
   "provider-register": 60 * 60,
   report: 60 * 60,
   block: 60 * 60,
@@ -61,6 +64,7 @@ export const LIMITS: Record<string, number> = {
   "reset-token": 10,
   "reset-request": 3,
   "resend-verification": 5,
+  "resend-verification-request": 5,
   "provider-register": 5,
   report: 5,
   block: 10,
