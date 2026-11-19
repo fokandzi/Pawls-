@@ -858,6 +858,7 @@ export const fr: Record<string, string> = {
   "myBookings.notice.FORBIDDEN": "Cette réservation n'est pas la vôtre.",
   "myBookings.notice.BOOKING_NOT_FOUND": "Réservation introuvable.",
   "myBookings.notice.DB_UNAVAILABLE": "Nous n'avons pas pu joindre la base de données — rien n'a été modifié.",
+  "myBookings.notice.RATE_LIMITED": "Trop de demandes de réservation en peu de temps — rien n'a été modifié. Patientez un instant, puis réessayez.",
 
   // /book/provider — provider space
   "providerSpace.seoTitle": "Espace prestataire — Pawls",

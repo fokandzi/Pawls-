@@ -29,8 +29,9 @@ type Session = typeof import("./session");
 type Auth = typeof import("../../auth-handler");
 type Mailer = typeof import("./mailer");
 type Safety = typeof import("../../../safety-api-handler");
+type Booking = typeof import("../../../booking-api-handler");
 
-let hash: Hash, tokens: Tokens, legacy: Legacy, rl: RL, deletion: Deletion, session: Session, auth: Auth, mailer: Mailer, safety: Safety;
+let hash: Hash, tokens: Tokens, legacy: Legacy, rl: RL, deletion: Deletion, session: Session, auth: Auth, mailer: Mailer, safety: Safety, booking: Booking;
 let seq = 0;
 const email = (tag: string) => `${tag}-${++seq}@hermetic.example`;
 
@@ -69,6 +70,7 @@ beforeAll(async () => {
   auth = await import("../../auth-handler");
   mailer = await import("./mailer");
   safety = await import("../../../safety-api-handler");
+  booking = await import("../../../booking-api-handler");
 });
 
 // ── 1. Email tokens ─────────────────────────────────────────────────────────
@@ -382,5 +384,31 @@ describe("account deletion", () => {
     expect(first.status).toBe(302);
     const again = await auth.handleAuthPost(post("/auth/delete-account", { confirmEmail: addr, confirm: "1" }, cookie));
     expect(again.status).toBe(401);
+  });
+});
+
+// ── 5. Batch F1: no-JS booking rate limit reaches the page (F1-1) ────────────
+describe("booking 429 no-JS path (F1-1)", () => {
+  test("11th form post gets 303 → /book/my-bookings?error=RATE_LIMITED", async () => {
+    const me = await insertUser(email("booking-rl"), { verified: true });
+    const cookie = await cookieFor(me);
+    // Exhaust the 10/hour booking-create bucket for this user.
+    for (let i = 0; i < 10; i++) expect((await rl.rateLimit("booking-create", `u${me}`)).limited).toBe(false);
+    const res = await booking.handleBookingApi(
+      new Request(`${SITE}/api/bookings`, {
+        method: "POST",
+        headers: {
+          Origin: SITE,
+          Accept: "text/html",
+          "x-forwarded-for": "203.0.113.11",
+          "Content-Type": "application/x-www-form-urlencoded",
+          Cookie: cookie,
+        },
+        body: "providerId=1&serviceId=1&date=2026-12-01&time=10:00",
+      }),
+    );
+    expect(res.status).toBe(303);
+    // The exact query string /book/my-bookings accepts as a notice code.
+    expect(res.headers.get("location")).toBe("/book/my-bookings?error=RATE_LIMITED");
   });
 });

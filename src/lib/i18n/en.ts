@@ -826,6 +826,7 @@ export const en: Record<string, string> = {
   "myBookings.notice.FORBIDDEN": "This booking is not yours.",
   "myBookings.notice.BOOKING_NOT_FOUND": "Booking not found.",
   "myBookings.notice.DB_UNAVAILABLE": "We couldn't reach the database — nothing was changed.",
+  "myBookings.notice.RATE_LIMITED": "Too many booking requests in a short time — nothing was changed. Wait a moment, then try again.",
 
   // /book/provider
   "providerSpace.seoTitle": "Provider space — Pawls",

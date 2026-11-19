@@ -9,6 +9,9 @@
  *   - the INVALID_SERVER_CONFIG → 503 mapping (no more "retry in a moment").
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { t } from "./i18n";
 import { verificationGate } from "./auth/login-gate";
 import {
   decodeUploadthingToken,
@@ -142,5 +145,33 @@ describe("mapUploadthingError", () => {
     const failure = mapUploadthingError(new Error("boom"));
     expect(failure.ok).toBe(false);
     expect(failure.status).toBe(502);
+  });
+});
+
+// ── 4. Batch F1: /book/my-bookings?error=RATE_LIMITED notice ─────────────────
+describe("my-bookings RATE_LIMITED notice (F1-1)", () => {
+  const route = readFileSync(join(import.meta.dirname, "..", "routes", "book.my-bookings.tsx"), "utf8");
+  const noticeList = route.slice(route.indexOf("const NOTICE_CODES"), route.indexOf("] as const;"));
+
+  test("RATE_LIMITED is an accepted notice code (else the 303 renders nothing)", () => {
+    expect(noticeList).toContain('"RATE_LIMITED"');
+  });
+
+  test("every accepted code has FR-first copy in both dictionaries", () => {
+    const codes = [...noticeList.matchAll(/"([A-Za-z_]+)"/g)].map((m) => m[1]);
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of codes) {
+      const fr = t(`myBookings.notice.${code}`, "fr");
+      const en = t(`myBookings.notice.${code}`, "en");
+      expect(fr).not.toBe(`myBookings.notice.${code}`);
+      expect(en).not.toBe(`myBookings.notice.${code}`);
+      expect(fr).not.toBe(en);
+    }
+  });
+
+  test("the FR rate-limit notice says nothing was changed and to try again", () => {
+    const fr = t("myBookings.notice.RATE_LIMITED", "fr");
+    expect(fr).toContain("rien n'a été modifié");
+    expect(fr.toLowerCase()).toContain("réessayez");
   });
 });
