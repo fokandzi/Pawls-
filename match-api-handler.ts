@@ -37,6 +37,7 @@ import {
   conversationView,
   sendMessage,
   markConversationRead,
+  isConversationParticipant,
 } from "./src/lib/message-core";
 import { handleDogPhotoRequest } from "./src/lib/dog-photo-route";
 
@@ -325,6 +326,20 @@ export async function handleMatchApi(request: Request): Promise<Response> {
         if (msgMatch && request.method === "POST") {
           const csrf = assertSameOrigin(request);
           if (!csrf.ok) return json({ ok: false, error: csrf.error }, 403);
+          // QUOTA POLICY (batch F1): the send budget is charged ONLY for a
+          // conversation the caller can actually see. Until now rateLimit() ran
+          // first and the membership/not-found gate lived inside sendMessage(),
+          // so every request answered "not found" still consumed one send — a
+          // caller could burn a user's bucket with 404s, and the stored counter
+          // stopped meaning "messages this user was allowed to send".
+          // Abuse tradeoff: the precheck is ONE indexed SELECT on
+          // conversation_participants, taken after the session and CSRF checks,
+          // so a 404 flood costs exactly what a GET on the same path already
+          // costs — no new unbounded work per request, and the limiter still
+          // refuses the (limit+1)th authorised send for the rest of the window.
+          if (!(await isConversationParticipant(conversationId, sessionUser.id))) {
+            return json({ error: "NOT_FOUND", message: "Conversation not found." }, 404);
+          }
           const sendLimit = await rateLimit("message-send", `u${sessionUser.id}`);
           if (sendLimit.limited) return rateLimited(sendLimit.retryAfterSeconds);
           const body = await readBody(request);

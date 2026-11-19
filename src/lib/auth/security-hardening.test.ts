@@ -541,3 +541,33 @@ describe("messaging rate-limit copy (F1-3)", () => {
     expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 });
+
+// ── 8. Batch F1: message-send quota policy (F1-4) ────────────────────────────
+describe("message-send quota policy (F1-4)", () => {
+  test("a not-found conversation costs no budget (404, bucket untouched)", async () => {
+    const me = await insertUser(email("quota-404"), { verified: true });
+    const cookie = await cookieFor(me);
+    for (let i = 0; i < 5; i++) {
+      const res = await match.handleMatchApi(
+        jsonPost("/api/match/conversations/999999/messages", { body: "bonjour" }, cookie),
+      );
+      expect(res.status).toBe(404);
+    }
+    const rows = await q`SELECT count FROM rate_limits WHERE action = 'message-send' AND key = ${`u${me}`}`;
+    // Before F1-4 these five 404s burned five sends of the user's 60/10min.
+    expect(rows).toHaveLength(0);
+  });
+
+  test("the counter saturates at limit+1: rejections no longer run away", async () => {
+    const key = `u${await insertUser(email("quota-sat"), { verified: true })}`;
+    for (let i = 0; i < 60; i++) expect((await rl.rateLimit("message-send", key)).limited).toBe(false);
+    const first = await rl.rateLimit("message-send", key);
+    expect(first.limited).toBe(true);
+    expect(first.count).toBe(61);
+    for (let i = 0; i < 5; i++) expect((await rl.rateLimit("message-send", key)).limited).toBe(true);
+    const [row] = await q`SELECT count FROM rate_limits WHERE action = 'message-send' AND key = ${key}`;
+    // Was 62, 63, … for every rejected request; now one rejection is recorded once.
+    expect(Number(row.count)).toBe(61);
+    expect(first.retryAfterSeconds).toBeGreaterThan(0);
+  });
+});

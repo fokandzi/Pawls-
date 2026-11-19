@@ -75,6 +75,30 @@ export const LIMITS: Record<string, number> = {
   "booking-create": 10,
 };
 
+/**
+ * Count one attempt against `action`/`key` for the current fixed window.
+ *
+ * QUOTA POLICY (batch F1, decided — not an accident):
+ *   1. A request is counted when it REACHES the action. Callers must authorise
+ *      first and charge second, so a request that is rejected before the action
+ *      runs (unknown id, not a participant, unauthenticated) costs the caller
+ *      nothing. See match-api-handler.ts: message-send is charged only after the
+ *      conversation-membership precheck.
+ *   2. The stored counter saturates at `limit + 1`. Before, every rejected
+ *      request kept incrementing it (60 allowed sends + 2 rejections = count 62),
+ *      so the number stopped meaning "attempts on this action" and grew without
+ *      bound for as long as a client kept hammering.
+ *
+ * Abuse tradeoff: saturating instead of incrementing means the row stops
+ * recording how MANY times a client was rejected, only that it was. That is
+ * deliberate — the limiter's job is to keep refusing for the rest of the window
+ * (it still does: count stays > limit until the window rolls over), not to keep
+ * a per-rejection tally. Anything that needs a rejection tally belongs in
+ * audit_log, not in a quota counter that also gates real traffic. Likewise,
+ * authorise-then-charge means a flood of "not found" requests is answered
+ * without a quota write; it costs one indexed lookup, which is exactly what a
+ * GET on the same path already costs today, so it opens no new work per request.
+ */
 export async function rateLimit(action: string, key: string): Promise<RateLimitResult> {
   const windowSeconds = WINDOWS[action] ?? 60 * 60;
   const limit = LIMITS[action] ?? 5;
@@ -88,7 +112,7 @@ export async function rateLimit(action: string, key: string): Promise<RateLimitR
         1
       )
       ON CONFLICT (action, key, window_start)
-      DO UPDATE SET count = rate_limits.count + 1
+      DO UPDATE SET count = LEAST(rate_limits.count + 1, ${limit + 1})
       RETURNING count, window_start
     ` as any;
     const count = Number((row as any)?.count ?? 1);
