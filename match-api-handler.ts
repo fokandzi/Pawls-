@@ -54,7 +54,18 @@ function badJson(message: string, status = 400): Response {
 }
 
 function rateLimited(retryAfterSeconds: number): Response {
-  const res = json({ ok: false, error: "RATE_LIMITED", message: "Too many requests — please try again later." }, 429);
+  // Batch F1: the 429 body carries FR-first copy (like booking-api-handler's
+  // coreError) so no client has to invent the message, and the FR UI never
+  // falls back to an English sentence.
+  const res = json(
+    {
+      ok: false,
+      error: "RATE_LIMITED",
+      message: "Too many requests — please try again later.",
+      messageFr: "Trop de demandes en peu de temps — réessayez dans un instant.",
+    },
+    429,
+  );
   res.headers.set("Retry-After", String(retryAfterSeconds));
   return res;
 }

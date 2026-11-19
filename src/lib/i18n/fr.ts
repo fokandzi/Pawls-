@@ -123,6 +123,9 @@ export const fr: Record<string, string> = {
   "msg.placeholder": "Écrivez un message…",
   "msg.send": "Envoyer",
   "msg.sendFailed": "Impossible d'envoyer le message. Réessayez.",
+  // Lot F1 : ligne dédiée à la limite d'envoi (429) au lieu du message générique
+  // — le texte saisi est conservé.
+  "msg.tooMany": "Trop de messages envoyés d'un coup — patientez un instant puis réessayez. Votre message est conservé.",
   "msg.loadFailed": "Impossible de charger la conversation. Réessayez.",
   "msg.backToConversations": "← Retour aux conversations",
   "msg.unread": "non lu",

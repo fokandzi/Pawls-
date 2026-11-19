@@ -30,8 +30,9 @@ type Auth = typeof import("../../auth-handler");
 type Mailer = typeof import("./mailer");
 type Safety = typeof import("../../../safety-api-handler");
 type Booking = typeof import("../../../booking-api-handler");
+type Match = typeof import("../../../match-api-handler");
 
-let hash: Hash, tokens: Tokens, legacy: Legacy, rl: RL, deletion: Deletion, session: Session, auth: Auth, mailer: Mailer, safety: Safety, booking: Booking;
+let hash: Hash, tokens: Tokens, legacy: Legacy, rl: RL, deletion: Deletion, session: Session, auth: Auth, mailer: Mailer, safety: Safety, booking: Booking, match: Match;
 let seq = 0;
 const email = (tag: string) => `${tag}-${++seq}@hermetic.example`;
 
@@ -71,6 +72,7 @@ beforeAll(async () => {
   mailer = await import("./mailer");
   safety = await import("../../../safety-api-handler");
   booking = await import("../../../booking-api-handler");
+  match = await import("../../../match-api-handler");
 });
 
 // ── 1. Email tokens ─────────────────────────────────────────────────────────
@@ -517,5 +519,25 @@ describe("public resend-verification request (F1-2)", () => {
     expect(Number(over.headers.get("Retry-After"))).toBeGreaterThan(0);
     // The bucket is its own: the session-guarded resend is untouched.
     expect((await rl.rateLimit("resend-verification", "198.51.100.250")).count).toBe(1);
+  });
+});
+
+// ── 7. Batch F1: messaging 429 copy (F1-3) ───────────────────────────────────
+describe("messaging rate-limit copy (F1-3)", () => {
+  test("the 429 body carries FR copy and Retry-After (shared helper)", async () => {
+    const me = await insertUser(email("rl-429"), { verified: true });
+    const cookie = await cookieFor(me);
+    // Exhaust the conversation-start bucket; it answers through the same
+    // rateLimited() helper as message-send.
+    for (let i = 0; i < 20; i++) expect((await rl.rateLimit("conversation-start", `u${me}`)).limited).toBe(false);
+    const res = await match.handleMatchApi(
+      jsonPost("/api/match/conversations/start", { otherUserId: 1 }, cookie),
+    );
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as { error: string; message: string; messageFr: string };
+    expect(body.error).toBe("RATE_LIMITED");
+    expect(body.messageFr).toContain("réessayez");
+    expect(body.messageFr).not.toBe(body.message);
+    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 });

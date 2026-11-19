@@ -175,3 +175,29 @@ describe("my-bookings RATE_LIMITED notice (F1-1)", () => {
     expect(fr.toLowerCase()).toContain("réessayez");
   });
 });
+
+// ── 5. Batch F1: messaging 429 copy reaches the thread UI (F1-3) ─────────────
+describe("conversation thread 429 copy (F1-3)", () => {
+  const route = readFileSync(join(import.meta.dirname, "..", "routes", "match.conversations_.$id.tsx"), "utf8");
+
+  test("FR-first: both languages have a dedicated rate-limit line", () => {
+    const fr = t("msg.tooMany", "fr");
+    const en = t("msg.tooMany", "en");
+    expect(fr).not.toBe("msg.tooMany");
+    expect(en).not.toBe("msg.tooMany");
+    expect(fr).not.toBe(en);
+    expect(fr.toLowerCase()).toContain("patientez");
+  });
+
+  test("a 429 selects msg.tooMany, everything else keeps the generic line", () => {
+    expect(route).toContain('res.status === 429 ? "rate" : "generic"');
+    expect(route).toContain('t(sendError === "rate" ? "msg.tooMany" : "msg.sendFailed", L)');
+  });
+
+  test("typed text is preserved on failure (cleared only on success)", () => {
+    const clear = route.indexOf('setNewMsg("")');
+    const fail = route.indexOf("setSendError(res.status === 429");
+    expect(fail).toBeGreaterThan(-1);
+    expect(clear).toBeGreaterThan(fail);
+  });
+});

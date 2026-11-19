@@ -123,6 +123,9 @@ export const en: Record<string, string> = {
   "msg.placeholder": "Type a message…",
   "msg.send": "Send",
   "msg.sendFailed": "Couldn't send your message. Please try again.",
+  // Batch F1: a dedicated line for the message-send rate limit (429) instead of
+  // the generic "couldn't send" — the typed text is preserved.
+  "msg.tooMany": "Too many messages at once — wait a moment, then try again. Your message is still here.",
   "msg.loadFailed": "Couldn't load the conversation. Please try again.",
   "msg.backToConversations": "← Back to conversations",
   "msg.unread": "unread",

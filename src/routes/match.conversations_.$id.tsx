@@ -55,7 +55,7 @@ function ConversationThreadPage() {
   const [error, setError] = useState("");
   const [newMsg, setNewMsg] = useState("");
   const [sending, setSending] = useState(false);
-  const [sendFailed, setSendFailed] = useState(false);
+  const [sendError, setSendError] = useState<"rate" | "generic" | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Safety: relation status + action UI
@@ -134,7 +134,7 @@ function ConversationThreadPage() {
     const body = newMsg.trim();
     if (!body || sending) return;
     setSending(true);
-    setSendFailed(false);
+    setSendError(null);
     try {
       const res = await fetch(`/api/match/conversations/${conversationId}/messages`, {
         method: "POST",
@@ -143,14 +143,17 @@ function ConversationThreadPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setSendFailed(true);
+        // Batch F1: a 429 gets its OWN copy instead of the generic "couldn't
+        // send" line. The typed message is untouched (newMsg is only cleared on
+        // success, below), so the visitor can retry without retyping.
+        setSendError(res.status === 429 ? "rate" : "generic");
         if (res.status === 404) setStatus("notFound");
         return;
       }
       setNewMsg("");
       setMessages((prev) => [...prev, data.message]);
     } catch {
-      setSendFailed(true);
+      setSendError("generic");
     } finally {
       setSending(false);
     }
@@ -336,8 +339,10 @@ function ConversationThreadPage() {
                 )}
               </div>
 
-              {sendFailed && (
-                <p className="border-t border-[var(--pawls-cream-100)] bg-red-50 px-4 py-2 text-xs font-medium text-red-600">{t("msg.sendFailed", L)}</p>
+              {sendError && (
+                <p className="border-t border-[var(--pawls-cream-100)] bg-red-50 px-4 py-2 text-xs font-medium text-red-600">
+                  {t(sendError === "rate" ? "msg.tooMany" : "msg.sendFailed", L)}
+                </p>
               )}
               <form onSubmit={handleSend} className="border-t border-[var(--pawls-cream-100)] bg-white px-4 py-3">
                 <div className="mx-auto flex max-w-lg items-center gap-2">
