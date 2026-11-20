@@ -2,7 +2,6 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createBookingTables } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
 
 type Provider = {
@@ -65,7 +64,6 @@ import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
 const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
-  await createBookingTables();
   try {
     // P0 Data: REAL providers only — seeded/demo rows never appear as supply,
     // and only approved providers are bookable. There are none yet, so the

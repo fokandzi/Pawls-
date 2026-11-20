@@ -11,6 +11,7 @@
     "go-live": "bash ./go-live.sh",
     "format": "prettier --write .",
     "db:migrate": "bun run scripts/migrate.ts",
+    "db:maintain": "bun run scripts/db-maintenance.ts",
     "test:hermetic": "node scripts/hermetic-test/run.mjs"
   },
   "dependencies": {

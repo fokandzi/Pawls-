@@ -39,6 +39,7 @@ const DEFAULT_SUITES = [
   "src/lib/launch-fixes.test.ts",
   "src/lib/match-ui.test.ts",
   "src/lib/seo-titles.test.ts",
+  "src/lib/server-fn-auth.test.ts",
 ];
 
 const SENSITIVE = /DATABASE|^PG|NEON|STRIPE|RESEND|UPLOADTHING|REVENUECAT|POSTHOG|VERCEL|MAIL_FROM|ATTRIBUTION/i;
