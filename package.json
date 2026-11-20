@@ -10,7 +10,8 @@
     "publish": "bash ./publish.sh",
     "go-live": "bash ./go-live.sh",
     "format": "prettier --write .",
-    "db:migrate": "bun run scripts/migrate.ts"
+    "db:migrate": "bun run scripts/migrate.ts",
+    "db:maintain": "bun run scripts/db-maintenance.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

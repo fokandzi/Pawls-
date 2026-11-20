@@ -2,21 +2,9 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
 import { sql } from "../db";
-import { createBreedTables } from "../db/schema";
 import { createMembershipCheckout } from "../db/payments";
 
 // ── Ensure email column exists ──────────────────────────────────────────────
-const ensureBreederEmailColumn = createServerFn({ method: "POST" }).handler(async () => {
-  await sql()`
-    ALTER TABLE breeders
-    ADD COLUMN IF NOT EXISTS email TEXT
-  `;
-  await sql()`
-    ALTER TABLE breeders
-    ADD COLUMN IF NOT EXISTS phone TEXT
-  `;
-  return { success: true };
-});
 
 // ── Server function: register breeder ────────────────────────────────────────
 type RegisterBreederInput = {
@@ -60,11 +48,18 @@ const registerBreeder = createServerFn({ method: "POST" })
 
     return { name, email, location, breed_specialty, years_experience, health_testing, description, phone, website };
   })
-  .handler(async ({ data }): Promise<RegisterBreederResult> => {
+  .handler(async ({ data, request }): Promise<RegisterBreederResult> => {
+    // F3 (finding S1): a public INSERT is not an endpoint anyone may call. The
+    // session decides who the breeder row belongs to; the client's own email is
+    // only accepted when it IS the account email, so no one can register a
+    // kennel in someone else's name. CSRF middleware is not authentication.
+    const { requireUser } = await import("../lib/auth/authz");
+    const auth = await requireUser(request);
+    if (!auth.ok) return { success: false, error: "Please log in to register a kennel." };
+    if (auth.user.role !== "admin" && data.email !== auth.user.email.trim().toLowerCase()) {
+      return { success: false, error: "You can only register a kennel for your own account." };
+    }
     try {
-      await createBreedTables();
-      await ensureBreederEmailColumn();
-
       // Check for duplicate email
       const [existing] = await sql()`
         SELECT id FROM breeders WHERE email = ${data.email}

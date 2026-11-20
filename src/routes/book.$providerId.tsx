@@ -3,8 +3,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { sql } from "../db";
 import { createBooking } from "../db/bookings";
-import { createCheckoutSession } from "../db/payments";
-import { createBookingTables } from "../db/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,7 +88,6 @@ const getProviderDetail = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }) => {
     try {
-      await createBookingTables();
       const [provider] = await sql()`SELECT id, name, category, description, location, image_url, rating, review_count FROM providers WHERE id = ${data.providerId} AND is_demo = false AND approval_status = 'approved'`;
       if (!provider) return { provider: null, services: [], error: "Provider not found" };
       const services = await sql()`SELECT id, name, price_cents, duration_minutes FROM services WHERE provider_id = ${data.providerId} ORDER BY name`;
@@ -163,26 +160,10 @@ function ProviderDetailPage() {
       });
       if (result.success) {
         setBookingResult(result.booking);
-        // Create Stripe checkout session for payment. Security #5: the server
-        // derives price/currency/product from the booking row — the client only
-        // sends the opaque booking id.
-        setCheckoutLoading(true);
-        try {
-          const checkoutResult = await createCheckoutSession({
-            data: {
-              bookingId: result.booking.id,
-            },
-          });
-          if ("url" in checkoutResult && checkoutResult.url) {
-            window.location.href = checkoutResult.url;
-            return;
-          }
-          // Payments not configured / checkout rejected — stay on confirmation card
-          setCheckoutLoading(false);
-        } catch {
-          // Stripe unavailable — stay on confirmation card
-          setCheckoutLoading(false);
-        }
+        // F3 (finding S1): the Stripe checkout server function was deleted —
+        // it was callable unauthenticated with any booking id and created a
+        // payment session for it. Payments stay OFF by design, so the booking
+        // confirmation card is the end of the flow.
       } else {
         setFormError(result.error);
       }

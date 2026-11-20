@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createRescueTables } from "../db/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,7 +37,6 @@ const getDogDetail = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }) => {
     try {
-      await createRescueTables();
 
       const [dog] = await sql()`
         SELECT 

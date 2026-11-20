@@ -2,10 +2,9 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
 import { sql } from "../db";
-import { createBookingTables } from "../db/schema";
 
 // ── Ensure email column exists ──────────────────────────────────────────────
-const ensureProviderEmailColumn = createServerFn({ method: "POST" }).handler(async () => {
+async function ensureProviderEmailColumn() {
   await sql()`
     ALTER TABLE providers
     ADD COLUMN IF NOT EXISTS email TEXT
@@ -18,8 +17,7 @@ const ensureProviderEmailColumn = createServerFn({ method: "POST" }).handler(asy
     ALTER TABLE providers
     ADD COLUMN IF NOT EXISTS website TEXT
   `;
-  return { success: true };
-});
+}
 
 // ── Server function: register provider ───────────────────────────────────────
 type RegisterProviderInput = {
@@ -70,7 +68,6 @@ const registerProvider = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }): Promise<RegisterProviderResult> => {
     try {
-      await createBookingTables();
       await ensureProviderEmailColumn();
 
       // Check for duplicate email
