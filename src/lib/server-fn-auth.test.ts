@@ -20,6 +20,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SERVER_FN_NAMES, SERVER_FN_ID_SUFFIX } from "./server-fn-allowlist";
+import {
+  serverFnGuardResponse,
+  SERVER_FN_GUARD_HEADER,
+  SERVER_FN_GUARD_VALUE,
+} from "../../server-fn-guard";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const SRC = join(REPO, "src");
@@ -176,7 +182,7 @@ const FUNCTIONS = serverFunctions();
 describe("F3 — no server function is an unauthenticated endpoint", () => {
   test("the scan actually sees the server functions (guards against a silent no-op)", () => {
     expect(FUNCTIONS.length).toBeGreaterThan(10);
-    expect(FUNCTIONS.map((f) => f.name)).toContain("createBooking");
+    expect(FUNCTIONS.map((f) => f.name)).toContain("getMe");
     expect(FUNCTIONS.map((f) => f.name)).not.toContain("getWaitlistEmails");
   });
 
@@ -232,5 +238,80 @@ describe("F3 — no server function is an unauthenticated endpoint", () => {
     const script = readFileSync(join(REPO, "scripts/db-maintenance.ts"), "utf8");
     expect(/createServerFn\s*\(/.test(script)).toBe(false);
     expect(script).toContain("assertNotProductionSeeding");
+  });
+});
+
+describe("F3b — an unknown server-function id answers a controlled 404", () => {
+  const call = (id: string) =>
+    serverFnGuardResponse(new Request(`http://127.0.0.1:3999/_serverFn/${id}`, { method: "POST" }));
+
+  test("every deleted endpoint id is refused with 404, not 500", async () => {
+    const seen: string[] = [];
+    for (const name of DELETED_ENDPOINTS) {
+      const res = call(`${name}${SERVER_FN_ID_SUFFIX}`);
+      expect(res).not.toBeNull();
+      expect(res!.status).toBe(404);
+      seen.push(name);
+    }
+    expect(seen.length).toBe(DELETED_ENDPOINTS.length);
+  });
+
+  test("the 404 is deliberate: our marker header plus a JSON error code", async () => {
+    const res = call("getWaitlistEmails_createServerFn_handler")!;
+    expect(res.headers.get(SERVER_FN_GUARD_HEADER)).toBe(SERVER_FN_GUARD_VALUE);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("SERVER_FN_NOT_FOUND");
+  });
+
+  test("an invented id is refused too, and an empty id as well", () => {
+    expect(call("totally_made_up_createServerFn_handler")!.status).toBe(404);
+    expect(serverFnGuardResponse(new Request("http://127.0.0.1:3999/_serverFn/"))!.status).toBe(404);
+  });
+
+  test("a registered id is passed through to the framework (no false 404s)", () => {
+    for (const name of SERVER_FN_NAMES) {
+      expect(serverFnGuardResponse(new Request(`http://127.0.0.1:3999/_serverFn/${name}${SERVER_FN_ID_SUFFIX}`))).toBeNull();
+    }
+  });
+
+  test("non server-function paths are untouched", () => {
+    expect(serverFnGuardResponse(new Request("http://127.0.0.1:3999/book"))).toBeNull();
+    expect(serverFnGuardResponse(new Request("http://127.0.0.1:3999/api/bookings"))).toBeNull();
+  });
+
+  test("the allowlist is exactly the set of server functions in src (no drift either way)", () => {
+    const scanned = new Set(FUNCTIONS.map((f) => f.name));
+    const allowed = new Set<string>(SERVER_FN_NAMES);
+    const missing = [...scanned].filter((n) => !allowed.has(n));
+    const stale = [...allowed].filter((n) => !scanned.has(n));
+    expect({ missing, stale }).toEqual({ missing: [], stale: [] });
+  });
+
+  test("both HTTP entries consult the guard before the SSR handler", () => {
+    for (const entry of ["serve.ts", "vercel-entry.ts"]) {
+      const src = readFileSync(join(REPO, entry), "utf8");
+      expect(src).toContain("serverFnGuardResponse");
+      const guardAt = src.indexOf("serverFnGuardResponse(request)") >= 0
+        ? src.indexOf("serverFnGuardResponse(request)")
+        : src.indexOf("serverFnGuardResponse(req)");
+      const ssrAt = Math.min(
+        ...["fetchHandler.fetch(", "handler.fetch(", "fetch(request)"]
+          .map((needle) => src.indexOf(needle))
+          .filter((i) => i > 0),
+      );
+      expect(guardAt).toBeGreaterThan(0);
+      expect(guardAt).toBeLessThan(ssrAt);
+    }
+  });
+
+  test("the guard cannot reach the database (no sql/neon/env import)", () => {
+    for (const file of ["server-fn-guard.ts", "src/lib/server-fn-allowlist.ts"]) {
+      const src = stripComments(readFileSync(join(REPO, file), "utf8"));
+      expect(/from\s+["'][^"']*(\/db|neon)/.test(src)).toBe(false);
+      expect(/\bsql\s*\(/.test(src)).toBe(false);
+      expect(src.includes("DATABASE_" + "URL")).toBe(false);
+    }
   });
 });

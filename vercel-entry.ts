@@ -11,6 +11,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import handler from "./dist/server/server.js";
+import { serverFnGuardResponse } from "./server-fn-guard.ts";
 import { handleRegisterPost } from "./register-handler.ts";
 import { handleAuthPost } from "./src/auth-handler.ts";
 import { handleMatchCreatePost } from "./dog-profile-handler.ts";
@@ -53,6 +54,19 @@ export default async function vercelHandler(
 ): Promise<void> {
   try {
     const request = toWebRequest(req);
+
+    // Removed / invented /_serverFn/<id> -> controlled 404, before the SSR
+    // (server-function) handler runs. No handler is registered for such an id,
+    // so this also guarantees the request never reaches the database.
+    {
+      const unknownServerFn = serverFnGuardResponse(request);
+      if (unknownServerFn) {
+        res.statusCode = unknownServerFn.status;
+        unknownServerFn.headers.forEach((value, key) => res.setHeader(key, value));
+        res.end(await unknownServerFn.text());
+        return;
+      }
+    }
 
     // GET /health — anonymous, minimal, truthful (batch E seed): DB reachability
     // + whether photo storage is really configured. Pre-SSR so a probe never
