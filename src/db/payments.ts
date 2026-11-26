@@ -212,20 +212,6 @@ export async function deriveCheckout(
   }
 }
 
-export const createCheckoutSession = createServerFn({ method: "POST" })
-  .validator((data: unknown): CheckoutInput => parseCheckoutPayload(data))
-  .handler(async ({ data, request }): Promise<CheckoutResult> => {
-    // Gracefully handle missing Stripe key (never present on the client).
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey) {
-      return { status: 500, code: "PAYMENTS_NOT_CONFIGURED", error: "Payments not configured" };
-    }
-    const stripe = getStripe();
-    return deriveCheckout(request, data.bookingId, {
-      stripeCreate: (params: Stripe.Checkout.SessionCreateParams) => stripe.checkout.sessions.create(params),
-    });
-  });
-
 export type MembershipCheckoutInput = {
   breederId: number;
   tier: "plus" | "premium";
@@ -249,7 +235,21 @@ export const createMembershipCheckout = createServerFn({ method: "POST" })
 
     return { breederId, tier: tier as "plus" | "premium", priceCents };
   })
-  .handler(async ({ data }): Promise<{ url: string } | { error: string }> => {
+  .handler(async ({ data, request }): Promise<{ url: string } | { error: string }> => {
+    // F3 (finding S1): the client chooses breederId, so the SERVER must prove
+    // the caller owns that breeder record before any checkout session exists.
+    // The CSRF middleware is not authentication — it trusts a caller-written
+    // Origin — so the identity check happens here, inside the handler.
+    const { requireUser } = await import("../lib/auth/authz");
+    const auth = await requireUser(request);
+    if (!auth.ok) return { error: "Please log in to continue." };
+    const [owned] = await sql()`
+      SELECT id FROM breeders WHERE id = ${data.breederId} AND lower(email) = lower(${auth.user.email})
+    `;
+    if (!owned && auth.user.role !== "admin") {
+      return { error: "You do not have permission to do this." };
+    }
+
     // Gracefully handle missing Stripe key
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) {

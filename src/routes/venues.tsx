@@ -2,7 +2,6 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createVenuesTable } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 
@@ -220,7 +219,6 @@ const featureEmoji: Record<string, string> = {
 
 const getVenues = createServerFn({ method: "POST" }).handler(async () => {
   try {
-    await createVenuesTable();
 
     // P0 Data: no auto-seeding from page views (fixture venues are demo-only).
     const rows = await sql()`

@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createBreedTables } from "../db/schema";
 
 type Breeder = {
   id: number;
@@ -38,7 +37,6 @@ const getBreederDetail = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     try {
-      await createBreedTables();
 
       const [breeder] = await sql()`
         SELECT id, name, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing, image_url, is_demo
