@@ -21,6 +21,7 @@
  * (prod failure) as a controlled 503.
  */
 import { sql } from "../../db";
+import { redactTokenLinks } from "./email-tokens";
 
 const RESEND_URL = "https://api.resend.com/emails";
 const DEFAULT_FROM = "Pawls <no-reply@pawls.club>";
@@ -83,13 +84,28 @@ async function recordMail(entry: MailLogEntry): Promise<void> {
   }
 }
 
+/**
+ * Raw verify/reset links may be printed to the console only on a developer's
+ * own machine (opt-in, never on Vercel, never with NODE_ENV=production). Every
+ * other log line and every mail_log row carries the redacted body: a stored or
+ * logged link is a working login/reset credential.
+ */
+function devRawLinksAllowed(): boolean {
+  return (
+    process.env.PAWLS_DEV_MAIL_LINKS === "1" &&
+    process.env.NODE_ENV !== "production" &&
+    !process.env.VERCEL_ENV
+  );
+}
+
 export async function sendMail(message: MailMessage): Promise<MailResult> {
   const mode = mailMode();
   if (mode === "test") {
-    const body = `TO: ${message.to}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;
+    const raw = `TO: ${message.to}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;
+    const body = redactTokenLinks(raw);
     // Console log must make the test nature unmistakable.
     console.log(
-      `[auth-mail][TEST MODE — NOT SENT] to=${message.to} subject="${message.subject}"\n${body}`,
+      `[auth-mail][TEST MODE — NOT SENT] to=${message.to} subject="${message.subject}"\n${devRawLinksAllowed() ? raw : body}`,
     );
     await recordMail({
       to: message.to,
@@ -105,7 +121,9 @@ export async function sendMail(message: MailMessage): Promise<MailResult> {
   // PROD mode: actually send via Resend.
   const apiKey = process.env.RESEND_API_KEY;
   const from = mailFrom();
-  const body = `TO: ${message.to}\nFROM: ${from}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;
+  const body = redactTokenLinks(
+    `TO: ${message.to}\nFROM: ${from}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`,
+  );
   try {
     const res = await fetch(RESEND_URL, {
       method: "POST",

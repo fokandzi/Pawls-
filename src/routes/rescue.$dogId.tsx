@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createRescueTables } from "../db/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,7 +37,6 @@ const getDogDetail = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }) => {
     try {
-      await createRescueTables();
 
       const [dog] = await sql()`
         SELECT 
@@ -67,7 +65,8 @@ const getDogDetail = createServerFn({ method: "GET" })
 // ── Route definition ─────────────────────────────────────────────────────────
 
 import { seoHead } from "../lib/seo";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 /** Minimal {placeholder} interpolation for the SEO templates (same shape the
  * /book/$providerId detail route uses). */
@@ -79,22 +78,32 @@ export const Route = createFileRoute("/rescue/$dogId")({
   // FR-first SSR title/meta (P2 item 5): the not-found branch was hard-coded EN
   // ("Rescue Dog — Pawls") and the named branch used an EN-only generator.
   head: ({ loaderData }) => {
+    const L: Lang = (loaderData as { lang?: Lang } | undefined)?.lang ?? DEFAULT_LANG;
     const d = loaderData as { dog: { name: string; breed: string } | null };
     if (d?.dog) {
       const vars = { name: d.dog.name, breed: d.dog.breed };
       return seoHead({
-        title: seoFill(t("rescueDetail.seoNamedTitle", DEFAULT_LANG), vars),
-        description: seoFill(t("rescueDetail.seoNamedDesc", DEFAULT_LANG), vars),
+        title: seoFill(t("rescueDetail.seoNamedTitle", L), vars),
+        description: seoFill(t("rescueDetail.seoNamedDesc", L), vars),
         path: `/rescue/${encodeURIComponent(d.dog.name.toLowerCase())}`,
       });
     }
     return seoHead({
-      title: t("rescueDetail.seoTitle", DEFAULT_LANG),
-      description: t("rescueDetail.seoDesc", DEFAULT_LANG),
+      title: t("rescueDetail.seoTitle", L),
+      description: t("rescueDetail.seoDesc", L),
       path: "/rescue",
     });
   },
-  loader: ({ params }) => getDogDetail({ data: { dogId: params.dogId } }),
+  loader: async ({ params }) => {
+    const data = await getDogDetail({ data: { dogId: params.dogId } });
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    return { ...data, lang };
+  },
   component: RescueDogDetailPage,
 });
 
@@ -106,11 +115,12 @@ const sizeEmoji: Record<string, string> = {
   large: "",
 };
 
-const sizeLabel: Record<string, string> = {
-  small: "Small",
-  medium: "Medium",
-  large: "Large",
-};
+function sizeLabelFor(size: string, L: Lang): string {
+  if (size === "small") return t("rescueDetail.sizeSmall", L);
+  if (size === "medium") return t("rescueDetail.sizeMedium", L);
+  if (size === "large") return t("rescueDetail.sizeLarge", L);
+  return size;
+}
 
 const breedEmojis: Record<string, string> = {
   "Labrador": "",
@@ -136,16 +146,17 @@ function dogEmoji(breed: string): string {
   return "";
 }
 
-function ageLabel(age: number): string {
-  if (age < 1) return "Under 1 year";
-  if (age === 1) return "1 year old";
-  return `${age} years old`;
+function ageLabel(age: number, L: Lang): string {
+  if (age < 1) return t("rescueDetail.ageUnderOne", L);
+  if (age === 1) return t("rescueDetail.ageOne", L);
+  return `${age} ${t("rescueDetail.ageYears", L)}`;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 function RescueDogDetailPage() {
-  const { dog, error } = Route.useLoaderData();
+  const { dog, error, lang: serverLang } = Route.useLoaderData() as { dog: RescueDogDetail | null; error: string | null; lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
 
   // Error / loading states
   if (error || !dog) {
@@ -156,18 +167,18 @@ function RescueDogDetailPage() {
           <div className="max-w-sm text-center">
             <span className="text-5xl"></span>
             <h2 className="mt-4 text-2xl font-bold text-gray-900">
-              {error === "Dog not found" ? "Dog not found" : "Coming soon"}
+              {error === "Dog not found" ? t("rescueDetail.notFoundTitle", L) : t("rescueDetail.comingSoonTitle", L)}
             </h2>
             <p className="mt-2 text-gray-600">
               {error === "Dog not found"
-                ? "This dog may have been adopted or the listing was removed."
-                : "Our rescue listings are being set up. Check back soon!"}
+                ? t("rescueDetail.notFoundBody", L)
+                : t("rescueDetail.comingSoonBody", L)}
             </p>
             <Link
               to="/rescue"
               className="mt-6 inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-colors hover:bg-[var(--pawls-terracotta-700)]"
             >
-              ← Back to all dogs
+              {t("rescueDetail.back", L)}
             </Link>
           </div>
         </section>
@@ -189,7 +200,7 @@ function RescueDogDetailPage() {
             to="/rescue"
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--pawls-terracotta-500)] hover:text-[var(--pawls-terracotta-700)] transition-colors"
           >
-            ← Back to all dogs
+            {t("rescueDetail.back", L)}
           </Link>
         </div>
       </div>
@@ -199,8 +210,7 @@ function RescueDogDetailPage() {
         <div className="bg-red-500 px-6 py-3">
           <div className="mx-auto max-w-4xl text-center">
             <p className="text-sm font-bold text-white">
-               URGENT — This demo listing shows how urgent markers will look on
-               real rescue profiles once shelters join Pawls.
+              {t("rescueDetail.urgentBanner", L)}
             </p>
           </div>
         </div>
@@ -223,26 +233,26 @@ function RescueDogDetailPage() {
 
               {/* Key stats card */}
               <div className="mt-6 rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 p-5">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">About</h3>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">{t("rescueDetail.about", L)}</h3>
                 <dl className="space-y-3">
                   <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">Breed</dt>
+                    <dt className="text-sm text-gray-500">{t("rescueDetail.breed", L)}</dt>
                     <dd className="text-sm font-semibold text-gray-900">{dog.breed}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">Age</dt>
-                    <dd className="text-sm font-semibold text-gray-900">{ageLabel(dog.age)}</dd>
+                    <dt className="text-sm text-gray-500">{t("rescueDetail.age", L)}</dt>
+                    <dd className="text-sm font-semibold text-gray-900">{ageLabel(dog.age, L)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">Size</dt>
+                    <dt className="text-sm text-gray-500">{t("rescueDetail.size", L)}</dt>
                     <dd className="text-sm font-semibold text-gray-900">
-                      {sizeEmoji[dog.size]} {sizeLabel[dog.size] ?? dog.size}
+                      {sizeEmoji[dog.size]} {sizeLabelFor(dog.size, L)}
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">Gender</dt>
+                    <dt className="text-sm text-gray-500">{t("rescueDetail.gender", L)}</dt>
                     <dd className="text-sm font-semibold text-gray-900">
-                      {dog.gender === "male" ? " Male" : " Female"}
+                      {dog.gender === "male" ? t("rescueDetail.male", L) : t("rescueDetail.female", L)}
                     </dd>
                   </div>
                 </dl>
@@ -251,7 +261,7 @@ function RescueDogDetailPage() {
               {/* Compatibility card */}
               <div className="mt-4 rounded-2xl border border-[var(--pawls-cream-100)] bg-[var(--pawls-cream-50)]/50 p-5">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-                  Good with
+                  {t("rescueDetail.goodWith", L)}
                 </h3>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -259,7 +269,7 @@ function RescueDogDetailPage() {
                       {dog.good_with_dogs ? "" : ""}
                     </span>
                     <span className={`text-sm ${dog.good_with_dogs ? "font-medium text-gray-900" : "text-gray-400"}`}>
-                       Other dogs
+                       {t("rescueDetail.otherDogs", L)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -267,7 +277,7 @@ function RescueDogDetailPage() {
                       {dog.good_with_kids ? "" : ""}
                     </span>
                     <span className={`text-sm ${dog.good_with_kids ? "font-medium text-gray-900" : "text-gray-400"}`}>
-                       Children
+                       {t("rescueDetail.children", L)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -275,7 +285,7 @@ function RescueDogDetailPage() {
                       {dog.good_with_cats ? "" : ""}
                     </span>
                     <span className={`text-sm ${dog.good_with_cats ? "font-medium text-gray-900" : "text-gray-400"}`}>
-                       Cats
+                       {t("rescueDetail.cats", L)}
                     </span>
                   </div>
                 </div>
@@ -292,24 +302,23 @@ function RescueDogDetailPage() {
                   </h1>
                   {/* Demo listing badge — matches the list page pattern */}
                   <span className="inline-flex items-center rounded-full bg-[var(--pawls-cream-100)] px-2.5 py-1 text-xs font-semibold text-[var(--pawls-gold-500)] shadow-sm">
-                    Demo
+                    {t("rescueDetail.demo", L)}
                   </span>
                 </div>
-                <p className="mt-1 text-lg text-gray-500">{dog.breed} · {sizeLabel[dog.size] ?? dog.size} · {ageLabel(dog.age)}</p>
+                <p className="mt-1 text-lg text-gray-500">{dog.breed} · {sizeLabelFor(dog.size, L)} · {ageLabel(dog.age, L)}</p>
               </div>
               {/* Description */}
               <div className="mb-8">
-                <h2 className="mb-3 text-lg font-semibold text-gray-900">About {dog.name}</h2>
+                <h2 className="mb-3 text-lg font-semibold text-gray-900">{t("rescueDetail.aboutNamed", L)} {dog.name}</h2>
                 <p className="leading-relaxed text-gray-700">{dog.description}</p>
               </div>
               {/* Adoption flow — coming soon (no fake Apply flow) */}
               <div className="mb-10">
                 <span className="inline-flex items-center gap-2 rounded-full bg-gray-200 px-8 py-3.5 text-base font-semibold text-gray-500">
-                  🐾 Adoption coming soon
+                  🐾 {t("rescueDetail.adoptionSoon", L)}
                 </span>
                 <p className="mt-2 text-sm text-gray-400">
-                  Live adoption applications are being set up — shelters will
-                  join Pawls soon.
+                  {t("rescueDetail.adoptionSoonBody", L)}
                 </p>
               </div>
               {/* Shelter info */}
@@ -320,8 +329,7 @@ function RescueDogDetailPage() {
 
                 <div className="space-y-2 border-t border-[var(--pawls-cream-100)] pt-4">
                   <p className="text-sm text-gray-400">
-                    Contact details are hidden while Pawls is in beta — they'll
-                    appear here once this shelter joins the platform.
+                    {t("rescueDetail.contactHidden", L)}
                   </p>
                 </div>
               </div>

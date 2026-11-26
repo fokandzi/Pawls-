@@ -5,9 +5,16 @@
  *   N=16384, r=8, p=1, 16-byte random salt, 64-byte derived key.
  *
  * Legacy rows: pre-auth users were stored as unsalted SHA-256 hex (64 chars).
- * Those are verified via sha256 and transparently upgraded to scrypt on the
- * next successful login (see verifyAndUpgradePassword). Plaintext is never
- * stored anywhere.
+ * Those are verified via sha256 and upgraded to scrypt on the next successful
+ * login (auth-handler handleLogin, via needsRehash). Plaintext is never stored
+ * anywhere.
+ *
+ * Wrapped legacy rows: `sha256-scrypt$N$r$p$salt$hash` = scrypt(sha256hex(pw)).
+ * wrapLegacySha256Hash() converts a bare SHA-256 row WITHOUT knowing the
+ * password, so the unsalted digests stop sitting in the database while their
+ * owners have not logged in yet (scripts/security/wrap-legacy-password-hashes.ts).
+ * The owner's existing password keeps working; the next login re-hashes it as
+ * plain scrypt.
  */
 import { scrypt as scryptCb, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
@@ -34,15 +41,22 @@ export function isLegacySha256Hash(hash: string | null | undefined): boolean {
   return !!hash && /^[0-9a-f]{64}$/i.test(hash);
 }
 
-export async function hashPassword(password: string): Promise<string> {
+const WRAPPED_PREFIX = "sha256-scrypt$";
+
+/** A legacy SHA-256 digest wrapped in scrypt (see wrapLegacySha256Hash). */
+export function isWrappedLegacyHash(hash: string | null | undefined): boolean {
+  return !!hash && hash.startsWith(WRAPPED_PREFIX);
+}
+
+async function scryptEncode(prefix: string, input: string): Promise<string> {
   const salt = randomBytes(SCRYPT_SALT_BYTES);
-  const derived = await scrypt(password, salt, SCRYPT_KEYLEN, {
+  const derived = await scrypt(input, salt, SCRYPT_KEYLEN, {
     N: SCRYPT_N,
     r: SCRYPT_R,
     p: SCRYPT_P,
   });
   return [
-    "scrypt",
+    prefix,
     SCRYPT_N,
     SCRYPT_R,
     SCRYPT_P,
@@ -51,28 +65,53 @@ export async function hashPassword(password: string): Promise<string> {
   ].join("$");
 }
 
+async function scryptMatches(input: string, stored: string): Promise<boolean> {
+  const parts = stored.split("$");
+  if (parts.length !== 6) return false;
+  const [, nStr, rStr, pStr, saltB64, hashB64] = parts;
+  const n = Number(nStr);
+  const r = Number(rStr);
+  const p = Number(pStr);
+  if (!Number.isFinite(n) || !Number.isFinite(r) || !Number.isFinite(p)) return false;
+  let salt: Buffer;
+  let expected: Buffer;
+  try {
+    salt = Buffer.from(saltB64, "base64url");
+    expected = Buffer.from(hashB64, "base64url");
+  } catch {
+    return false;
+  }
+  if (salt.length === 0 || expected.length === 0) return false;
+  const derived = await scrypt(input, salt, expected.length, { N: n, r, p });
+  return timingSafeEqual(derived, expected);
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  return scryptEncode("scrypt", password);
+}
+
+/**
+ * scrypt-wrap a bare legacy SHA-256 hex digest. Needs no password: the input
+ * is the stored digest itself, which verifyPassword recomputes from the
+ * password at login. Throws on anything that is not a legacy digest.
+ */
+export async function wrapLegacySha256Hash(legacyHex: string): Promise<string> {
+  if (!isLegacySha256Hash(legacyHex)) throw new Error("not a legacy sha256 digest");
+  return scryptEncode(WRAPPED_PREFIX.slice(0, -1), legacyHex.toLowerCase());
+}
+
+/** True when a successful login should replace the stored hash with hashPassword(). */
+export function needsRehash(stored: string | null | undefined): boolean {
+  if (isLegacySha256Hash(stored) || isWrappedLegacyHash(stored)) return true;
+  if (!isScryptHash(stored)) return false;
+  const [, n, r, p] = String(stored).split("$");
+  return Number(n) < SCRYPT_N || Number(r) < SCRYPT_R || Number(p) < SCRYPT_P;
+}
+
 export async function verifyPassword(password: string, stored: string | null | undefined): Promise<boolean> {
   if (!stored) return false;
-  if (isScryptHash(stored)) {
-    const parts = stored.split("$");
-    if (parts.length !== 6) return false;
-    const [, nStr, rStr, pStr, saltB64, hashB64] = parts;
-    const n = Number(nStr);
-    const r = Number(rStr);
-    const p = Number(pStr);
-    if (!Number.isFinite(n) || !Number.isFinite(r) || !Number.isFinite(p)) return false;
-    let salt: Buffer;
-    let expected: Buffer;
-    try {
-      salt = Buffer.from(saltB64, "base64url");
-      expected = Buffer.from(hashB64, "base64url");
-    } catch {
-      return false;
-    }
-    if (salt.length === 0 || expected.length === 0) return false;
-    const derived = await scrypt(password, salt, expected.length, { N: n, r, p });
-    return timingSafeEqual(derived, expected);
-  }
+  if (isScryptHash(stored)) return scryptMatches(password, stored);
+  if (isWrappedLegacyHash(stored)) return scryptMatches(legacySha256(password), stored);
   if (isLegacySha256Hash(stored)) {
     // Legacy unsalted sha256 — verify, then the caller upgrades to scrypt.
     const digest = createHash("sha256").update(password).digest("hex");

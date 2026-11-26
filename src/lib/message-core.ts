@@ -188,6 +188,17 @@ export async function genuineActiveMatchBetween(a: number, b: number): Promise<b
 }
 
 /**
+ * Cheap "can this user even see this conversation?" check, exported for callers
+ * that must charge a quota BEFORE doing work (batch F1, message-send): a request
+ * for a conversation the caller is not a participant of must not consume budget.
+ * Membership only — the full gate (block rows, live genuine match) still runs
+ * inside sendMessage()/conversationView().
+ */
+export async function isConversationParticipant(conversationId: number, userId: number): Promise<boolean> {
+  return (await participantConversation(conversationId, userId)) !== null;
+}
+
+/**
  * THE single conversation-access gate. Every message entry point (start, list,
  * view, send, mark-read) goes through this: membership in
  * conversation_participants AND no block row AND a live genuine match.

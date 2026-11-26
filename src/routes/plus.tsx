@@ -1,8 +1,16 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { seoHead } from "../lib/seo";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 export const Route = createFileRoute("/plus")({
+  loader: async (): Promise<{ lang: Lang }> => {
+    try {
+      return { lang: await resolveRouteLang() };
+    } catch {
+      return { lang: DEFAULT_LANG };
+    }
+  },
   head: () => seoHead({ title: t("plus.title", DEFAULT_LANG), description: t("plus.desc", DEFAULT_LANG), path: "/plus" }),
   component: PlusPage,
 });
@@ -13,7 +21,8 @@ export const Route = createFileRoute("/plus")({
 // entitlement from server-side subscriptions). This page only describes the
 // vision as "coming soon".
 function PlusPage() {
-  const lang = DEFAULT_LANG;
+  const { lang: serverLang } = Route.useLoaderData() as { lang?: Lang };
+  const lang: Lang = serverLang ?? DEFAULT_LANG;
   const upcomingFeatures = [
     t("plus.feature1", lang),
     t("plus.feature2", lang),
@@ -23,7 +32,7 @@ function PlusPage() {
   ];
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader active="plus" />
+      <AppHeader active="plus" lang={lang} />
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-20 pt-20">
         <div className="mx-auto max-w-xl text-center">
           <span className="rounded-full bg-[var(--pawls-cream-100)] px-4 py-2 text-sm font-semibold">
@@ -65,7 +74,7 @@ function PlusPage() {
           </Link>
         </div>
       </section>
-      <AppFooter />
+      <AppFooter lang={lang} />
     </div>
   );
 }

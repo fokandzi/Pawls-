@@ -2,9 +2,9 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createVenuesTable } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -220,7 +220,6 @@ const featureEmoji: Record<string, string> = {
 
 const getVenues = createServerFn({ method: "POST" }).handler(async () => {
   try {
-    await createVenuesTable();
 
     // P0 Data: no auto-seeding from page views (fixture venues are demo-only).
     const rows = await sql()`
@@ -263,7 +262,13 @@ export const Route = createFileRoute("/venues")({
     let venues = allVenues;
     if (type) venues = venues.filter((v) => v.type === type);
     if (city) venues = venues.filter((v) => v.city === city);
-    return { venues, allVenues, type, city, error };
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    return { venues, allVenues, type, city, error, lang };
   },
   component: VenuesPage,
 });
@@ -287,9 +292,8 @@ function VenuesPage() {
   const error = (data as any)?.error ?? null;
   const typeFilter = (data as any)?.type ?? null;
   const cityFilter = (data as any)?.city ?? null;
-  // Phase-1 primary language (FR) — these public pages have no inline FR|EN
-  // toggle yet; the EN strings live in the shared i18n resource files.
-  const lang = DEFAULT_LANG;
+  // FR-first: the server resolved the visitor's persisted language.
+  const lang: Lang = ((data as any)?.lang as Lang | undefined) ?? DEFAULT_LANG;
 
   // Filter chips are built from the full list; the visible list is already
   // filtered server-side from the URL query params.
@@ -301,7 +305,7 @@ function VenuesPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="venues" />
+      <AppHeader active="venues" lang={lang} />
 
       {/* Hero */}
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-12 pt-8 text-center">
@@ -520,7 +524,7 @@ function VenuesPage() {
       )}
 
       {/* Footer */}
-      <AppFooter />
+      <AppFooter lang={lang} />
     </div>
   );
 }

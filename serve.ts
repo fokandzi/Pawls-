@@ -11,6 +11,7 @@
 // with an already-running server. Every sandbox user has passwordless sudo, so
 // the takeover works across user boundaries.
 import handler from "./dist/server/server.js";
+import { serverFnGuardResponse } from "./server-fn-guard.ts";
 import { handleStripeWebhook } from "./webhook-handler.ts";
 import { handleRegisterPost } from "./register-handler.ts";
 import { handleAuthPost } from "./src/auth-handler.ts";
@@ -68,6 +69,14 @@ for (let attempt = 1; ; attempt++) {
         {
           const guarded = await guardPageRequest(req);
           if (guarded) return guarded;
+        }
+
+        // Removed / invented /_serverFn/<id> -> controlled 404, before the SSR
+        // (server-function) handler runs. No handler is registered for such an
+        // id, so this also guarantees the request never reaches the database.
+        {
+          const unknownServerFn = serverFnGuardResponse(req);
+          if (unknownServerFn) return unknownServerFn;
         }
 
         // Native POST /register — sign-up form posts here. Must be handled

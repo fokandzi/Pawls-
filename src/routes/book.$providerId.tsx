@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { sql } from "../db";
-import { createBookingTables } from "../db/schema";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
 import { LangToggle } from "../lib/lang-toggle";
 
@@ -101,7 +100,6 @@ const getProviderDetail = createServerFn({ method: "GET" })
     const { resolveRequestLang } = await import("../lib/i18n/route-lang");
     const lang = await resolveRequestLang(request);
     try {
-      await createBookingTables();
       // REAL-ONLY clause, identical to /book and to the /book/register counter
       // (src/lib/provider-core.ts): an unowned legacy "approved" row (or one
       // owned by a test account) is not public supply and has no bookable page.

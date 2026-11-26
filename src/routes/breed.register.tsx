@@ -1,22 +1,9 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
 import { sql } from "../db";
-import { createBreedTables } from "../db/schema";
-import { createMembershipCheckout } from "../db/payments";
-
-// ── Ensure email column exists ──────────────────────────────────────────────
-const ensureBreederEmailColumn = createServerFn({ method: "POST" }).handler(async () => {
-  await sql()`
-    ALTER TABLE breeders
-    ADD COLUMN IF NOT EXISTS email TEXT
-  `;
-  await sql()`
-    ALTER TABLE breeders
-    ADD COLUMN IF NOT EXISTS phone TEXT
-  `;
-  return { success: true };
-});
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 // ── Server function: register breeder ────────────────────────────────────────
 type RegisterBreederInput = {
@@ -60,11 +47,18 @@ const registerBreeder = createServerFn({ method: "POST" })
 
     return { name, email, location, breed_specialty, years_experience, health_testing, description, phone, website };
   })
-  .handler(async ({ data }): Promise<RegisterBreederResult> => {
+  .handler(async ({ data, request }): Promise<RegisterBreederResult> => {
+    // F3 (finding S1): a public INSERT is not an endpoint anyone may call. The
+    // session decides who the breeder row belongs to; the client's own email is
+    // only accepted when it IS the account email, so no one can register a
+    // kennel in someone else's name. CSRF middleware is not authentication.
+    const { requireUser } = await import("../lib/auth/authz");
+    const auth = await requireUser(request);
+    if (!auth.ok) return { success: false, error: "Please log in to register a kennel." };
+    if (auth.user.role !== "admin" && data.email !== auth.user.email.trim().toLowerCase()) {
+      return { success: false, error: "You can only register a kennel for your own account." };
+    }
     try {
-      await createBreedTables();
-      await ensureBreederEmailColumn();
-
       // Check for duplicate email
       const [existing] = await sql()`
         SELECT id FROM breeders WHERE email = ${data.email}
@@ -73,6 +67,9 @@ const registerBreeder = createServerFn({ method: "POST" })
         return { success: false, error: "A breeder with this email already exists." };
       }
 
+      // The row is inserted PENDING: it is not discoverable until Pawls reviews
+      // it. The success screen below says exactly that — it never claims the
+      // kennel is listed.
       const [breeder] = await sql()`
         INSERT INTO breeders (name, email, location, description, breed_specialty, verification_status, membership_tier, years_experience, health_testing, phone)
         VALUES (${data.name}, ${data.email}, ${data.location}, ${data.description}, ${data.breed_specialty}, 'pending', 'free', ${data.years_experience}, ${data.health_testing}, ${data.phone})
@@ -86,33 +83,48 @@ const registerBreeder = createServerFn({ method: "POST" })
     }
   });
 
-// ── Server function: get breeder count for social proof ──────────────────────
-const getBreederCount = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    const [row] = await sql()`SELECT COUNT(*)::int AS count FROM breeders`;
-    return { count: Number(row.count) };
-  } catch {
-    return { count: 0 };
-  }
-});
-
 // ── Route definition ─────────────────────────────────────────────────────────
-import { seoHead, SEO } from "../lib/seo";
+import { seoHead } from "../lib/seo";
+
+/** FR-first server messages: the four known outcomes are translated, anything
+ * else is shown verbatim rather than invented. */
+function localizeError(message: string, L: Lang): string {
+  if (message === "Please log in to register a kennel.") return t("breedReg.errLogin", L);
+  if (message === "You can only register a kennel for your own account.") return t("breedReg.errOwnAccount", L);
+  if (message === "A breeder with this email already exists.") return t("breedReg.errDuplicate", L);
+  return message;
+}
 
 export const Route = createFileRoute("/breed/register")({
-  head: () => seoHead(SEO["breed/register"]),
-  loader: () => getBreederCount(),
+  loader: async (): Promise<{ lang: Lang }> => {
+    try {
+      return { lang: await resolveRouteLang() };
+    } catch {
+      return { lang: DEFAULT_LANG };
+    }
+  },
+  head: ({ loaderData }) => {
+    const L: Lang = (loaderData as { lang?: Lang } | undefined)?.lang ?? DEFAULT_LANG;
+    return seoHead({
+      title: t("breedReg.title", L),
+      description: t("breedReg.intro", L),
+      path: "/breed/register",
+    });
+  },
   component: BreederRegisterPage,
 });
 
+const fieldClass =
+  "mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20";
+
 // ── Form component ───────────────────────────────────────────────────────────
 function BreederRegisterPage() {
-  const { count } = Route.useLoaderData();
-  const router = useRouter();
+  const { lang: serverLang } = Route.useLoaderData() as { lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
 
   const [form, setForm] = useState({
     name: "",
-    email: localStorage.getItem("pawls_email") || "",
+    email: "",
     location: "",
     breed_specialty: "",
     years_experience: 0,
@@ -125,6 +137,13 @@ function BreederRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ breederId: number } | null>(null);
+
+  // Restore the email the visitor used on the site, client-side only (never on
+  // the server, where localStorage does not exist).
+  useEffect(() => {
+    const saved = localStorage.getItem("pawls_email");
+    if (saved) setForm((prev) => (prev.email ? prev : { ...prev, email: saved }));
+  }, []);
 
   // Persist email to localStorage
   useEffect(() => {
@@ -149,28 +168,12 @@ function BreederRegisterPage() {
       if (res.success) {
         setResult({ breederId: res.breederId });
       } else {
-        setError(res.error);
+        setError(localizeError(res.error, L));
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? localizeError(err.message, L) : t("breedReg.errGeneric", L));
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleUpgrade = async (tier: "plus" | "premium", priceCents: number) => {
-    if (!result) return;
-    try {
-      const checkout = await createMembershipCheckout({
-        data: { breederId: result.breederId, tier, priceCents },
-      });
-      if ("url" in checkout && checkout.url) {
-        window.location.href = checkout.url;
-      } else if ("error" in checkout) {
-        alert(checkout.error || "Payment setup failed. You can upgrade later from your dashboard.");
-      }
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Checkout failed. You can upgrade later.");
     }
   };
 
@@ -178,82 +181,18 @@ function BreederRegisterPage() {
   if (result) {
     return (
       <div className="flex min-h-dvh flex-col">
-
         <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
           <section className="mx-auto max-w-2xl px-6 py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-              <span className="text-4xl"></span>
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--pawls-cream-100)]">
+              <span className="text-4xl">📝</span>
             </div>
-            <h1 className="text-3xl font-extrabold text-gray-900">You're listed!</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900">{t("breedReg.successTitle", L)}</h1>
             <p className="mt-3 text-lg text-gray-600">
-              <strong>{form.name}</strong> is now on Pawls. Dog owners in {form.location || "your area"} can discover your kennel.
+              <strong>{form.name}</strong> {t("breedReg.successBody1", L)}
             </p>
-
-            {/* Free tier info */}
-            <div className="mt-8 rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)] p-6 text-left">
-              <h2 className="text-lg font-bold text-gray-900"> You're on the Free plan</h2>
-              <ul className="mt-3 space-y-2 text-sm text-gray-600">
-                <li> Basic breeder listing</li>
-                <li> 1 active litter</li>
-                <li> Standard visibility in search</li>
-              </ul>
-            </div>
-
-            {/* Upgrade prompt */}
-            <div className="mt-8">
-              <h2 className="text-xl font-bold text-gray-900"> Upgrade to get discovered faster</h2>
-              <p className="mt-2 text-gray-600">
-                Premium and Plus breeders get featured placement, more litters, and the verified badge.
-              </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                {/* Plus card */}
-                <div className="rounded-2xl border-2 border-[var(--pawls-cream-200)] bg-white p-6 shadow-sm">
-                  <div className="mb-2">
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700"> Plus</span>
-                  </div>
-                  <div className="text-3xl font-extrabold text-gray-900">€25<span className="text-sm font-normal text-gray-500">/mo</span></div>
-                  <ul className="mt-4 space-y-2 text-left text-sm text-gray-600">
-                    <li> Highlighted in search</li>
-                    <li> Up to 3 active litters</li>
-                    <li> Health test badges</li>
-                    <li> Priority support</li>
-                  </ul>
-                  <button
-                    disabled
-                    className="mt-5 w-full cursor-not-allowed rounded-full bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-500"
-                  >
-                    Coming soon
-                  </button>
-                </div>
-
-                {/* Premium card */}
-                <div className="rounded-2xl border-2 border-yellow-400 bg-white p-6 shadow-sm ring-2 ring-yellow-200">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">⭐ Premium</span>
-                    <span className="rounded-full bg-gradient-to-r from-[var(--pawls-cream-50)]0 to-[var(--pawls-terracotta-500)] px-2 py-0.5 text-[10px] font-bold text-white">BEST VALUE</span>
-                  </div>
-                  <div className="text-3xl font-extrabold text-gray-900">€40<span className="text-sm font-normal text-gray-500">/mo</span></div>
-                  <ul className="mt-4 space-y-2 text-left text-sm text-gray-600">
-                    <li> Everything in Plus</li>
-                    <li> Featured on /breed page</li>
-                    <li> Unlimited litters</li>
-                    <li> ⭐ Verified badge</li>
-                    <li> Homepage features</li>
-                  </ul>
-                  <button
-                    disabled
-                    className="mt-5 w-full cursor-not-allowed rounded-full bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-500"
-                  >
-                    Coming soon
-                  </button>
-                </div>
-              </div>
-
-              <p className="mt-4 text-sm text-gray-400">
-                You can also upgrade later from your breeder profile page.
-              </p>
-            </div>
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-gray-500">
+              {t("breedReg.successBody2", L)}
+            </p>
 
             <div className="mt-10 space-y-3">
               <Link
@@ -261,11 +200,11 @@ function BreederRegisterPage() {
                 params={{ breederId: String(result.breederId) }}
                 className="inline-flex items-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[var(--pawls-terracotta-700)]"
               >
-                View your listing →
+                {t("breedReg.viewListing", L)}
               </Link>
               <br />
               <Link to="/breed" className="text-sm font-medium text-gray-500 hover:text-[var(--pawls-terracotta-500)] transition-colors">
-                ← Back to breeder directory
+                {t("breedReg.backDirectory", L)}
               </Link>
             </div>
           </section>
@@ -277,27 +216,15 @@ function BreederRegisterPage() {
   // ── Registration form view ───────────────────────────────────────────
   return (
     <div className="flex min-h-dvh flex-col">
-
       <main className="flex-1 bg-gradient-to-b from-[var(--pawls-cream-50)] to-white">
         <section className="mx-auto max-w-2xl px-6 py-12">
           {/* Hero */}
           <div className="mb-10 text-center">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              Join as a Breeder
+              {t("breedReg.title", L)}
             </h1>
-            <p className="mx-auto mt-3 max-w-md text-base text-gray-600">
-              Get discovered by dog owners in Paris and across Île-de-France. List your kennel, showcase your litters, and connect with families looking for healthy, ethically-bred puppies.
-            </p>
+            <p className="mx-auto mt-3 max-w-md text-base text-gray-600">{t("breedReg.intro", L)}</p>
           </div>
-
-          {/* Social proof */}
-          {count > 0 && (
-            <div className="mb-8 rounded-2xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/50 p-4 text-center">
-              <p className="text-sm font-medium text-[var(--pawls-ink-700)]">
-                 Join <strong>{count}</strong> breeder{count !== 1 ? "s" : ""} already on Pawls
-              </p>
-            </div>
-          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-[var(--pawls-cream-100)] bg-white p-8 shadow-sm">
@@ -310,7 +237,7 @@ function BreederRegisterPage() {
             {/* Kennel name */}
             <div>
               <label htmlFor="name" className="block text-sm font-semibold text-gray-900">
-                Kennel Name <span className="text-red-500">*</span>
+                {t("breedReg.kennelName", L)} <span className="text-red-500">*</span>
               </label>
               <input
                 id="name"
@@ -319,15 +246,15 @@ function BreederRegisterPage() {
                 required
                 value={form.name}
                 onChange={handleChange}
-                placeholder="e.g., Labradors d'Île-de-France"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                placeholder={t("breedReg.kennelPlaceholder", L)}
+                className={fieldClass}
               />
             </div>
 
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-gray-900">
-                Email <span className="text-red-500">*</span>
+                {t("breedReg.email", L)} <span className="text-red-500">*</span>
               </label>
               <input
                 id="email"
@@ -336,15 +263,15 @@ function BreederRegisterPage() {
                 required
                 value={form.email}
                 onChange={handleChange}
-                placeholder="you@example.com"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                placeholder="vous@exemple.fr"
+                className={fieldClass}
               />
             </div>
 
             {/* Location */}
             <div>
               <label htmlFor="location" className="block text-sm font-semibold text-gray-900">
-                Location <span className="text-red-500">*</span>
+                {t("breedReg.location", L)} <span className="text-red-500">*</span>
               </label>
               <input
                 id="location"
@@ -353,16 +280,16 @@ function BreederRegisterPage() {
                 required
                 value={form.location}
                 onChange={handleChange}
-                placeholder="e.g., Rambouillet, Yvelines"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                placeholder={t("breedReg.locationPlaceholder", L)}
+                className={fieldClass}
               />
-              <p className="mt-1 text-xs text-gray-400">City and department — helps owners find breeders near them</p>
+              <p className="mt-1 text-xs text-gray-400">{t("breedReg.locationHint", L)}</p>
             </div>
 
             {/* Breed specialty */}
             <div>
               <label htmlFor="breed_specialty" className="block text-sm font-semibold text-gray-900">
-                Breed Specialty <span className="text-red-500">*</span>
+                {t("breedReg.breedSpecialty", L)} <span className="text-red-500">*</span>
               </label>
               <input
                 id="breed_specialty"
@@ -371,15 +298,15 @@ function BreederRegisterPage() {
                 required
                 value={form.breed_specialty}
                 onChange={handleChange}
-                placeholder="e.g., Labrador Retriever, French Bulldog"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                placeholder={t("breedReg.breedPlaceholder", L)}
+                className={fieldClass}
               />
             </div>
 
             {/* Years experience */}
             <div>
               <label htmlFor="years_experience" className="block text-sm font-semibold text-gray-900">
-                Years of Experience
+                {t("breedReg.years", L)}
               </label>
               <input
                 id="years_experience"
@@ -389,14 +316,14 @@ function BreederRegisterPage() {
                 max="100"
                 value={form.years_experience}
                 onChange={handleChange}
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                className={fieldClass}
               />
             </div>
 
             {/* Health testing */}
             <div>
               <label htmlFor="health_testing" className="block text-sm font-semibold text-gray-900">
-                Health Testing Certifications
+                {t("breedReg.health", L)}
               </label>
               <input
                 id="health_testing"
@@ -404,16 +331,16 @@ function BreederRegisterPage() {
                 type="text"
                 value={form.health_testing}
                 onChange={handleChange}
-                placeholder="e.g., OFA Hip, Elbow, CERF Eye Exam, DNA Panel"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                placeholder={t("breedReg.healthPlaceholder", L)}
+                className={fieldClass}
               />
-              <p className="mt-1 text-xs text-gray-400">List the health tests you perform on your breeding dogs</p>
+              <p className="mt-1 text-xs text-gray-400">{t("breedReg.healthHint", L)}</p>
             </div>
 
             {/* Description / Bio */}
             <div>
               <label htmlFor="description" className="block text-sm font-semibold text-gray-900">
-                About Your Kennel <span className="text-red-500">*</span>
+                {t("breedReg.about", L)} <span className="text-red-500">*</span>
               </label>
               <textarea
                 id="description"
@@ -422,15 +349,15 @@ function BreederRegisterPage() {
                 rows={4}
                 value={form.description}
                 onChange={handleChange}
-                placeholder="Tell owners about your breeding philosophy, experience, and what makes your kennel special..."
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20 resize-y"
+                placeholder={t("breedReg.aboutPlaceholder", L)}
+                className={`${fieldClass} resize-y`}
               />
             </div>
 
             {/* Phone */}
             <div>
               <label htmlFor="phone" className="block text-sm font-semibold text-gray-900">
-                Phone Number
+                {t("breedReg.phone", L)}
               </label>
               <input
                 id="phone"
@@ -439,14 +366,14 @@ function BreederRegisterPage() {
                 value={form.phone}
                 onChange={handleChange}
                 placeholder="+33 6 12 34 56 78"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                className={fieldClass}
               />
             </div>
 
             {/* Website */}
             <div>
               <label htmlFor="website" className="block text-sm font-semibold text-gray-900">
-                Website (optional)
+                {t("breedReg.website", L)}
               </label>
               <input
                 id="website"
@@ -454,8 +381,8 @@ function BreederRegisterPage() {
                 type="url"
                 value={form.website}
                 onChange={handleChange}
-                placeholder="https://your-kennel.com"
-                className="mt-1.5 block w-full rounded-xl border border-[var(--pawls-cream-200)] bg-[var(--pawls-cream-50)]/30 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[var(--pawls-terracotta-500)] focus:outline-none focus:ring-2 focus:ring-[var(--pawls-terracotta-500)]/20"
+                placeholder="https://votre-elevage.fr"
+                className={fieldClass}
               />
             </div>
 
@@ -465,20 +392,18 @@ function BreederRegisterPage() {
               disabled={submitting}
               className="w-full rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-3.5 text-sm font-semibold text-white shadow-md shadow-[var(--pawls-terracotta-500)]/20 transition-all hover:bg-[var(--pawls-terracotta-700)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "Creating your listing..." : "Create My Breeder Listing — Free"}
+              {submitting ? t("breedReg.submitting", L) : t("breedReg.submit", L)}
             </button>
 
-            <p className="text-center text-xs text-gray-400">
-              By registering, you agree to Pawls' breeder standards. Your listing goes live immediately.
-            </p>
+            <p className="text-center text-xs text-gray-400">{t("breedReg.terms", L)}</p>
           </form>
 
           {/* Value prop footer */}
           <div className="mt-10 text-center">
             <p className="text-sm text-gray-500">
-              Already registered?{" "}
+              {t("breedReg.already", L)}{" "}
               <Link to="/breed" className="font-medium text-[var(--pawls-terracotta-500)] hover:underline">
-                Browse the breeder directory →
+                {t("breedReg.browse", L)}
               </Link>
             </p>
           </div>

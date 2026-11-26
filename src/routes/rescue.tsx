@@ -3,9 +3,7 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { sql } from "../db";
-import { createRescueTables } from "../db/schema";
 import { EmptyState } from "../lib/empty-state";
-import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -348,43 +346,9 @@ export function staticRescueDogs(): StaticRescueDog[] {
 
 // ── Server functions ─────────────────────────────────────────────────────────
 
-const seedRescueData = createServerFn({ method: "POST" }).handler(async () => {
-  await createRescueTables();
-  // P0 Data: fixture shelters/dogs must never be inserted (or, worse, wiped
-  // via the DELETE path below) against the production database.
-  assertNotProductionSeeding("rescue.tsx seedRescueData");
-
-  // Check if already seeded
-  const [dogCount] = await sql()`SELECT COUNT(*)::int AS count FROM rescue_dogs`;
-  if (Number(dogCount.count) > 0) {
-    await sql()`DELETE FROM rescue_dogs`;
-    await sql()`DELETE FROM shelters`;
-    return { success: true, count: 0, message: "Already seeded" };
-  }
-
-  for (const s of seedShelters) {
-    const [shelter] = await sql()`
-      INSERT INTO shelters (name, location, description, phone, email, website)
-      VALUES (${s.name}, ${s.location}, ${s.description}, ${s.phone}, ${s.email}, ${s.website})
-      RETURNING id
-    `;
-
-    if (shelter) {
-      for (const d of s.dogs) {
-        await sql()`
-          INSERT INTO rescue_dogs (shelter_id, name, breed, age, size, gender, description, good_with_dogs, good_with_kids, good_with_cats, urgent, photo_url)
-          VALUES (${shelter.id}, ${d.name}, ${d.breed}, ${d.age}, ${d.size}, ${d.gender}, ${d.description}, ${d.good_with_dogs}, ${d.good_with_kids}, ${d.good_with_cats}, ${d.urgent}, ${d.photo_url || null})
-        `;
-      }
-    }
-  }
-
-  return { success: true, count: seedShelters.length };
-});
 
 const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
   try {
-    await createRescueTables();
 
     // P0 Data: no auto-seeding from page views. Rescue waits for real
     // shelter partnerships — demo shelters/dogs are marked is_demo=true and
@@ -414,10 +378,20 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
 
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 export const Route = createFileRoute("/rescue")({
   head: () => seoHead({ title: t("rescue.title", DEFAULT_LANG), description: t("rescue.desc", DEFAULT_LANG), path: "/rescue" }),
-  loader: () => getRescueDogs(),
+  loader: async () => {
+    const data = await getRescueDogs();
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    return { ...data, lang };
+  },
   component: RescuePage,
 });
 
@@ -479,10 +453,10 @@ function genderLabel(gender: string, lang: Lang): string {
 // ── Component ────────────────────────────────────────────────────────────────
 
 function RescuePage() {
-  const { dogs, error } = Route.useLoaderData();
+  const { dogs, error, lang: serverLang } = Route.useLoaderData() as { dogs: RescueDog[] | null; error: string | null; lang?: Lang };
   const routerState = useRouterState();
   const isExactRescue = routerState.location.pathname === "/rescue";
-  const lang = DEFAULT_LANG;
+  const lang: Lang = serverLang ?? DEFAULT_LANG;
 
   // Filter state
   const [sizeFilter, setSizeFilter] = useState<string | null>(null);
@@ -503,7 +477,7 @@ function RescuePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="rescue" />
+      <AppHeader active="rescue" lang={lang} />
 
       {isExactRescue ? (
         <>
@@ -757,7 +731,7 @@ function RescuePage() {
       )}
 
       {/* Footer */}
-      <AppFooter />
+      <AppFooter lang={lang} />
     </div>
   );
 }

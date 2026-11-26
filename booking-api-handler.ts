@@ -30,6 +30,7 @@
  */
 import { requireUser, getAuthUser } from "./src/lib/auth/authz";
 import { assertSameOrigin } from "./src/lib/auth/csrf";
+import { rateLimit } from "./src/lib/auth/rate-limit";
 import {
   availabilityView,
   bookingForActor,
@@ -201,6 +202,16 @@ export async function handleBookingApi(request: Request): Promise<Response> {
   if (pathname === "/api/bookings" && method === "POST") {
     const auth = await requireUser(request);
     if (!auth.ok) return json({ ok: false, error: auth.code, message: auth.message }, auth.status);
+    const rl = await rateLimit("booking-create", `u${auth.user.id}`);
+    if (rl.limited) {
+      return coreError(request, {
+        ok: false,
+        status: 429,
+        code: "RATE_LIMITED",
+        message: "Too many booking requests — please try again later.",
+        messageFr: "Trop de demandes de réservation — réessayez plus tard.",
+      }, "customer");
+    }
     const body = await readBody(request);
     const created = await createBookingForActor(
       { userId: auth.user.id, email: auth.user.email, name: auth.user.name },

@@ -3,10 +3,10 @@
 // native form POSTs (no client JS, no seroval). Every response is controlled:
 // 400 invalid input / 401 bad credentials / 403 forbidden / 404 unknown token
 // / 429 rate limited / 503 email unavailable. Never an uncontrolled 500.
-import { randomBytes } from "node:crypto";
 import { sql } from "./db";
 import { ensureAuthTables, writeAudit } from "./lib/auth/ensure";
-import { hashPassword, verifyPassword, isLegacySha256Hash, constantTimeEqual } from "./lib/auth/hash";
+import { hashPassword, verifyPassword, needsRehash, constantTimeEqual } from "./lib/auth/hash";
+import { issueEmailToken, consumeEmailToken } from "./lib/auth/email-tokens";
 import {
   createSession, revokeSession, revokeOtherSessions, revokeAllSessions,
   getSessionUser, clearSessionCookieHeader, requestIsSecure, sha256Hex,
@@ -73,7 +73,7 @@ const SETTINGS_LINKS = [
 ];
 
 /** CSRF failure — same FR-first page everywhere in the auth flow. */
-function blockedResponse(request: Request, links = NAV_HOME_LOGIN): Response {
+async function blockedResponse(request: Request, links = NAV_HOME_LOGIN): Promise<Response> {
   return errorPage(request, {
     titleKey: "auth.err.blocked",
     bodyKey: "auth.err.blockedBody",
@@ -82,7 +82,7 @@ function blockedResponse(request: Request, links = NAV_HOME_LOGIN): Response {
   });
 }
 /** Uncontrolled-failure page (never a bare 500 with no way back). */
-function serverErrorResponse(request: Request, links = NAV_HOME_LOGIN): Response {
+async function serverErrorResponse(request: Request, links = NAV_HOME_LOGIN): Promise<Response> {
   return errorPage(request, {
     titleKey: "auth.err.serverTitle",
     bodyKey: "auth.err.serverBody",
@@ -109,6 +109,10 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     // rate-limited, honest about whether an email was actually sent.
     case "/api/auth/resend-verification":
     case "/auth/resend-verification": return handleResendVerification(request);
+    // Public resend form on /verify-email (Batch F1): no session required, and
+    // the answer never reveals whether the address has an account.
+    case "/auth/resend-verification-request":
+    case "/api/auth/resend-verification-request": return handleResendVerificationRequest(request);
     case "/auth/me": return handleMe(request);
     default: return jsonResponse({ error: "Not found" }, 404);
   }
@@ -124,9 +128,7 @@ async function sendVerificationFor(
   userId: number,
   email: string,
 ): Promise<{ sent: boolean; failed: boolean }> {
-  const token = randomBytes(32).toString("base64url");
-  await sql()`INSERT INTO email_tokens (user_id, kind, token_hash, expires_at)
-              VALUES (${userId}, 'verify', ${sha256Hex(token)}, NOW() + interval '24 hours')`;
+  const token = await issueEmailToken(userId, "verify");
   const mail = await sendMail(verificationEmail(email, token));
   if (mail.mode === "test") return { sent: false, failed: false };
   if (!mail.ok) return { sent: false, failed: true };
@@ -447,6 +449,93 @@ export async function handleResendVerification(request: Request): Promise<Respon
   }
 }
 
+// ---- resend verification (public, non-enumerating) --------------------------
+/**
+ * POST /auth/resend-verification-request — Batch F1.
+ *
+ * For an unverified visitor with NO session (the link expired, they switched
+ * device, or the cookie is gone). Until now the only way to obtain a fresh link
+ * was to REGISTER AGAIN, and /verify-email offered « S'inscrire à la place » as
+ * the only escape — a dead end that also risked a duplicate-account mess. This
+ * reuses the ONE issuance path (sendVerificationFor, same as register and the
+ * session-guarded resend) so there is still a single place that mints links.
+ *
+ * Non-enumerating by construction:
+ *   - the answer is the same page for an unknown address, an already-verified
+ *     address and a real unverified one — the copy is CONDITIONAL ("si un compte
+ *     non vérifié existe…") and never asserts that this address received mail;
+ *   - "email is not configured here" is an ENVIRONMENT fact, so it gets its own
+ *     page for EVERY address (today: no RESEND_API_KEY anywhere);
+ *   - a provider delivery failure is logged server-side and still answered with
+ *     the same conditional page, so it cannot be used as an existence oracle.
+ * CSRF-checked, and rate-limited in its own bucket per IP *and* per address
+ * (5/hour each) because this endpoint sends mail to an address the caller chose.
+ */
+export async function handleResendVerificationRequest(request: Request): Promise<Response> {
+  const csrf = assertSameOrigin(request);
+  if (!csrf.ok) return blockedResponse(request, VERIFY_LINKS);
+  let email = "";
+  try {
+    const form = await request.formData();
+    email = formValue(form, "email").toLowerCase().slice(0, 320);
+  } catch {
+    return errorPage(request, {
+      titleKey: "auth.err.badRequest",
+      bodyKey: "auth.err.badRequestBody",
+      status: 400,
+      links: VERIFY_LINKS,
+    });
+  }
+  if (!EMAIL_RE.test(email)) {
+    return errorPage(request, {
+      titleKey: "auth.err.checkDetails",
+      bodyKey: "auth.resend.requestBadEmailBody",
+      status: 400,
+      links: VERIFY_LINKS,
+    });
+  }
+  const ipLimit = await rateLimit("resend-verification-request", clientIp(request));
+  if (ipLimit.limited) return rateLimitPage(request, ipLimit.retryAfterSeconds);
+  const addrLimit = await rateLimit("resend-verification-request", `email:${email}`);
+  if (addrLimit.limited) return rateLimitPage(request, addrLimit.retryAfterSeconds);
+
+  if (!emailConfigured()) {
+    // Honest, and identical for every address: nothing can leave this server.
+    return noticePage(request, {
+      titleKey: "auth.resend.requestNoEmailTitle",
+      bodyKey: "auth.resend.requestNoEmailBody",
+      links: VERIFY_LINKS,
+    });
+  }
+  try {
+    await ensureAuthTables();
+    const rows = await sql()`
+      SELECT id, email, email_verified_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1
+    ` as any;
+    const existing = rows[0] as { id: number; email: string; email_verified_at: string | null } | undefined;
+    if (existing && !existing.email_verified_at) {
+      const outcome = await sendVerificationFor(Number(existing.id), existing.email);
+      // Never turned into a response difference (see the doc comment): the
+      // visitor sees the same conditional page either way.
+      if (outcome.failed) console.error(`[auth] resend-verification-request: delivery failed for user ${existing.id}`);
+    }
+    return noticePage(request, {
+      titleKey: "auth.resend.requestSentTitle",
+      bodyKey: "auth.resend.requestSentBody",
+      bodyArgs: { email },
+      links: VERIFY_LINKS,
+    });
+  } catch (err) {
+    console.error("[auth] resend verification request failed", err);
+    return errorPage(request, {
+      titleKey: "auth.err.serverTitle",
+      bodyKey: "auth.err.serverBody",
+      status: 500,
+      links: VERIFY_LINKS,
+    });
+  }
+}
+
 // ---- login ------------------------------------------------------------------
 async function handleLogin(request: Request): Promise<Response> {
   const csrf = assertSameOrigin(request);
@@ -474,6 +563,10 @@ async function handleLogin(request: Request): Promise<Response> {
   }
   const rl = await rateLimit("login", `${email}|${clientIp(request)}`);
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
+  // Per-account cap across rotating IPs (the email+IP key alone allows one
+  // fresh budget per address an attacker controls).
+  const accountRl = await rateLimit("login-account", email);
+  if (accountRl.limited) return rateLimitPage(request, accountRl.retryAfterSeconds);
   try {
     await ensureAuthTables();
     const rows = await sql()`SELECT id, email, name, password_hash, suspended_at, email_verified_at FROM users WHERE lower(email) = lower(${email}) LIMIT 1`;
@@ -536,8 +629,12 @@ async function handleLogin(request: Request): Promise<Response> {
         `[auth] login allowed for unverified user ${user.id}: outbound email is not configured, so no verification could ever be sent`,
       );
     }
-    if (isLegacySha256Hash(user.password_hash)) {
-      await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${user.id}`;
+    // Legacy SHA-256 (bare or scrypt-wrapped) or weaker scrypt parameters:
+    // re-hash with the current scheme now that the password is known to match.
+    // Compare-and-swap on the old hash so a concurrent reset is never undone.
+    if (needsRehash(user.password_hash)) {
+      await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW()
+                  WHERE id = ${user.id} AND password_hash = ${user.password_hash}`;
     }
     const session = await createSession(request, Number(user.id));
     return redirectResponse("/match", [session.cookieHeader]);
@@ -560,30 +657,14 @@ async function handleVerifyEmail(request: Request): Promise<Response> {
       links: VERIFY_LINKS,
     });
   }
-  const rl = await rateLimit("verify-token", `${clientIp(request)}|${token}`);
+  // Keyed on the token's hash: rate_limits.key is stored for up to 48 h and
+  // must never hold a working credential.
+  const rl = await rateLimit("verify-token", `${clientIp(request)}|${sha256Hex(token)}`);
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   try {
     await ensureAuthTables();
-    const tokenHash = sha256Hex(token);
-    const rows = await sql()`
-      SELECT et.id, et.user_id FROM email_tokens et
-      WHERE et.token_hash = ${tokenHash} AND et.kind = 'verify'
-        AND et.used_at IS NULL AND et.expires_at > NOW()
-      LIMIT 1
-    ` as any;
-    const tok = rows[0] as any;
-    if (!tok) {
-      return errorPage(request, {
-        titleKey: "auth.err.linkInvalidTitle",
-        bodyKey: "auth.err.linkInvalidBody",
-        status: 404,
-        links: VERIFY_LINKS,
-      });
-    }
-    const marked = await sql()`
-      UPDATE email_tokens SET used_at = NOW() WHERE id = ${tok.id} AND used_at IS NULL RETURNING id
-    ` as any;
-    if (!(marked[0] as any)) {
+    const consumed = await consumeEmailToken(token, "verify");
+    if (!consumed.ok && consumed.reason === "used") {
       return errorPage(request, {
         titleKey: "auth.err.linkUsedTitle",
         bodyKey: "auth.err.linkUsedBody",
@@ -591,8 +672,16 @@ async function handleVerifyEmail(request: Request): Promise<Response> {
         links: [{ href: "/login", labelKey: "auth.nav.login" }],
       });
     }
-    await sql()`UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE id = ${tok.user_id}`;
-    const session = await createSession(request, Number(tok.user_id));
+    if (!consumed.ok) {
+      return errorPage(request, {
+        titleKey: "auth.err.linkInvalidTitle",
+        bodyKey: "auth.err.linkInvalidBody",
+        status: 404,
+        links: VERIFY_LINKS,
+      });
+    }
+    await sql()`UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE id = ${consumed.userId}`;
+    const session = await createSession(request, consumed.userId);
     return redirectResponse("/match/create?verified=1", [session.cookieHeader]);
   } catch (err) {
     console.error("[auth] verify failed", err);
@@ -629,9 +718,7 @@ async function handlePasswordResetRequest(request: Request): Promise<Response> {
     const user = rows[0] as any;
     let delivered = false;
     if (user) {
-      const token = randomBytes(32).toString("base64url");
-      await sql()`INSERT INTO email_tokens (user_id, kind, token_hash, expires_at)
-                  VALUES (${user.id}, 'reset', ${sha256Hex(token)}, NOW() + interval '1 hour')`;
+      const token = await issueEmailToken(Number(user.id), "reset");
       const mail = await sendMail(passwordResetEmail(email, token));
       if (!mail.ok) {
         return errorPage(request, {
@@ -709,37 +796,22 @@ async function handlePasswordReset(request: Request): Promise<Response> {
       links: RESET_LINKS,
     });
   }
-  const rl = await rateLimit("reset-token", `${clientIp(request)}|${token}`);
+  const rl = await rateLimit("reset-token", `${clientIp(request)}|${sha256Hex(token)}`);
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   try {
     await ensureAuthTables();
-    const rows = await sql()`
-      SELECT et.id, et.user_id FROM email_tokens et
-      WHERE et.token_hash = ${sha256Hex(token)} AND et.kind = 'reset'
-        AND et.used_at IS NULL AND et.expires_at > NOW()
-      LIMIT 1
-    ` as any;
-    const tok = rows[0] as any;
-    if (!tok) {
+    const consumed = await consumeEmailToken(token, "reset");
+    if (!consumed.ok) {
       return errorPage(request, {
-        titleKey: "auth.err.linkInvalidTitle",
-        bodyKey: "auth.err.linkInvalidBody",
+        titleKey: consumed.reason === "used" ? "auth.err.linkUsedTitle" : "auth.err.linkInvalidTitle",
+        bodyKey: consumed.reason === "used" ? "auth.err.linkUsedBody" : "auth.err.linkInvalidBody",
         status: 404,
         links: RESET_LINKS,
       });
     }
-    const marked = await sql()`UPDATE email_tokens SET used_at = NOW() WHERE id = ${tok.id} AND used_at IS NULL RETURNING id` as any;
-    if (!(marked[0] as any)) {
-      return errorPage(request, {
-        titleKey: "auth.err.linkUsedTitle",
-        bodyKey: "auth.err.linkUsedBody",
-        status: 404,
-        links: RESET_LINKS,
-      });
-    }
-    await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${tok.user_id}`;
-    await revokeAllSessions(Number(tok.user_id));
-    writeAudit(Number(tok.user_id), "password_reset", {});
+    await sql()`UPDATE users SET password_hash = ${await hashPassword(password)}, updated_at = NOW() WHERE id = ${consumed.userId}`;
+    await revokeAllSessions(consumed.userId);
+    writeAudit(consumed.userId, "password_reset", {});
     return redirectResponse("/login?reset=1");
   } catch (err) {
     console.error("[auth] password reset failed", err);

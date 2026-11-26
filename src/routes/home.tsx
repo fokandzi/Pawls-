@@ -2,9 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { AppIcon, type AppIconName } from "../lib/app-icon";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/home")({
+  loader: async (): Promise<{ lang: Lang }> => {
+    try {
+      return { lang: await resolveRouteLang() };
+    } catch {
+      return { lang: DEFAULT_LANG };
+    }
+  },
   head: () =>
     seoHead({
       title: t("welcome.seoTitle", DEFAULT_LANG),
@@ -17,7 +25,8 @@ export const Route = createFileRoute("/home")({
 /** In-app welcome / dashboard. FR-first through the i18n dict (EN fallback);
  * card labels reuse the nav.* keys so there is no duplicated UI string. */
 function HomePage() {
-  const L: Lang = DEFAULT_LANG;
+  const { lang: serverLang } = Route.useLoaderData() as { lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
   const tools: Array<{ to: string; icon: AppIconName; labelKey: string; descKey: string }> = [
     { to: "/match", icon: "match", labelKey: "nav.match", descKey: "welcome.card.match.desc" },
     { to: "/breed", icon: "breed", labelKey: "nav.breed", descKey: "welcome.card.breed.desc" },
@@ -26,7 +35,7 @@ function HomePage() {
   ];
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader />
+      <AppHeader lang={L} />
 
       {/* Dashboard content */}
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center sm:px-6">
@@ -67,7 +76,7 @@ function HomePage() {
         </div>
       </main>
 
-      <AppFooter />
+      <AppFooter lang={L} />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { EmptyState } from "../lib/empty-state";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 // ── Route definition ─────────────────────────────────────────────────────────
 //
@@ -14,7 +15,13 @@ import { seoHead } from "../lib/seo";
 
 export const Route = createFileRoute("/connect")({
   head: () => seoHead({ title: t("connect.title", DEFAULT_LANG), description: t("connect.desc", DEFAULT_LANG), path: "/connect" }),
-  loader: async () => ({}),
+  loader: async (): Promise<{ lang: Lang }> => {
+    try {
+      return { lang: await resolveRouteLang() };
+    } catch {
+      return { lang: DEFAULT_LANG };
+    }
+  },
   component: ConnectPage,
 });
 
@@ -23,14 +30,14 @@ export const Route = createFileRoute("/connect")({
 function ConnectPage() {
   const routerState = useRouterState();
   const isExactConnect = routerState.location.pathname === "/connect";
-  // Phase-1 primary language (FR) — this page has no inline FR|EN toggle yet;
-  // the EN strings live in the shared i18n resource files.
-  const lang = DEFAULT_LANG;
+  // FR-first: the server resolved the visitor's persisted language.
+  const { lang: serverLang } = Route.useLoaderData() as { lang?: Lang };
+  const lang: Lang = serverLang ?? DEFAULT_LANG;
 
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="connect" />
+      <AppHeader active="connect" lang={lang} />
 
       {isExactConnect ? (
         <>
@@ -60,7 +67,7 @@ function ConnectPage() {
       )}
 
       {/* Footer */}
-      <AppFooter />
+      <AppFooter lang={lang} />
     </div>
   );
 }

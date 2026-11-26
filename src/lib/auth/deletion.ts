@@ -27,7 +27,7 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
       WHERE user_id = ${user.id} OR (user_id IS NULL AND lower(email) = lower(${user.email}))
     ` as any;
     const dogIds = (dogRows as Array<{ id: number }>).map((r) => Number(r.id));
-    const [hasSwipes, hasMatches, hasMessages, hasBookings, hasSubscriptions, hasReferrals, hasConversations] =
+    const [hasSwipes, hasMatches, hasMessages, hasBookings, hasSubscriptions, hasReferrals, hasConversations, hasProviders, hasServices] =
       await Promise.all([
         tableExists("swipes"),
         tableExists("matches"),
@@ -36,6 +36,8 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
         tableExists("subscriptions"),
         tableExists("referrals"),
         tableExists("conversations"),
+        tableExists("providers"),
+        tableExists("services"),
       ]);
     await sql().transaction((tx) => {
       const q: any[] = [
@@ -51,8 +53,35 @@ export async function deleteUserAccount(user: SessionUser): Promise<DeleteResult
       }
       if (hasBookings) {
         q.push(tx`UPDATE bookings SET customer_name = 'Deleted user', customer_email = 'deleted@example.invalid'
-                  WHERE lower(customer_email) = lower(${user.email})`);
+                  WHERE customer_user_id = ${user.id} OR lower(customer_email) = lower(${user.email})`);
       }
+      // Provider listings the user owns are business records (bookings point
+      // at them) and are RETAINED, but nothing that reaches the person stays:
+      // contact email/phone/website and photo are cleared, the description
+      // (free text, may carry contact details) is emptied, the listing leaves
+      // public supply ('suspended') and its services stop being bookable. The
+      // name is kept so counterparties' booking history still reads correctly.
+      // owner_user_id then goes NULL via its FK when the user row is deleted.
+      if (hasProviders) {
+        if (hasServices) {
+          q.push(tx`UPDATE services SET is_active = false
+                    WHERE provider_id IN (SELECT id FROM providers WHERE owner_user_id = ${user.id})`);
+        }
+        // Booking mail went to the LISTING address, which may differ from the
+        // account email; anonymise it before the address is cleared below (an
+        // address that is also another account's login is left alone).
+        q.push(tx`UPDATE mail_log SET "to" = 'deleted@example.invalid', body = '[removed: account deleted]'
+                  WHERE lower("to") IN (SELECT lower(email) FROM providers
+                                        WHERE owner_user_id = ${user.id} AND email IS NOT NULL)
+                    AND lower("to") NOT IN (SELECT lower(email) FROM users WHERE id <> ${user.id})`);
+        q.push(tx`UPDATE providers
+                  SET email = NULL, phone = NULL, website = NULL, image_url = NULL, description = '',
+                      approval_status = CASE WHEN approval_status = 'rejected' THEN 'rejected' ELSE 'suspended' END
+                  WHERE owner_user_id = ${user.id}`);
+      }
+      // Delivery accounting is kept (honest send history), the person is not.
+      q.push(tx`UPDATE mail_log SET "to" = 'deleted@example.invalid', body = '[removed: account deleted]'
+                WHERE lower("to") = lower(${user.email})`);
       // Conversations the user participated in are deleted with the account
       // (messages + participant rows cascade via FK). This is the documented
       // deletion policy: a deleted user leaves no conversation artifacts.

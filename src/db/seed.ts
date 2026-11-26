@@ -1,6 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
 import { sql } from "../db";
-import { createBookingTables, createMatchTables } from "./schema";
+import { ensureBookingTablesSql, ensureMatchTables } from "./schema";
 import { assertNotProductionSeeding } from "../lib/prod-guard";
 
 const providers = [
@@ -125,12 +124,11 @@ for (let i = providers.length; i < 12; i++) {
  * Calls createBookingTables first to ensure schema exists.
  * Checks if data already exists — safe to call multiple times.
  */
-export const seedProviders = createServerFn({ method: "POST" }).handler(
-  async () => {
+export async function seedProviders() {
     // P0 Data: fixtures must never be inserted into production.
     assertNotProductionSeeding("seed.ts seedProviders");
     // Ensure tables exist
-    await createBookingTables();
+    await ensureBookingTablesSql();
 
     // Check if we've already seeded
     const [existing] = await sql()`
@@ -158,8 +156,7 @@ export const seedProviders = createServerFn({ method: "POST" }).handler(
     }
 
     return { success: true, count: providers.length };
-  },
-);
+}
 
 const dogProfiles = [
   {
@@ -279,9 +276,8 @@ const dogProfiles = [
  * Calls createMatchTables first to ensure schema exists.
  * Checks if data already exists — safe to call multiple times.
  */
-export const seedDogProfiles = createServerFn({ method: "POST" }).handler(
-  async () => {
-    await createMatchTables();
+export async function seedDogProfiles() {
+    await ensureMatchTables();
 
     const [existing] = await sql()`
       SELECT COUNT(*)::int AS count FROM dog_profiles
@@ -298,5 +294,4 @@ export const seedDogProfiles = createServerFn({ method: "POST" }).handler(
     }
 
     return { success: true, count: dogProfiles.length };
-  },
-);
+}

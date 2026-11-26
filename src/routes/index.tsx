@@ -5,6 +5,7 @@ import { TrustBadges } from "../lib/social-proof";
 import { AppHeader } from "../lib/app-header";
 import { AppIcon } from "../lib/app-icon";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 const getBusinessName = createServerFn({ method: "GET" }).handler(async () => {
   try {
@@ -47,8 +48,16 @@ export const Route = createFileRoute("/")({
     // ?waitlist=invalid|error — the native handler reports failure honestly and
     // the form must say so instead of showing the success card.
     const waitlistStatus = String(search.waitlist ?? "");
+    // FR-first: the visitor's persisted language (FR default, never throws).
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
     return {
       businessName,
+      lang,
       subscribed,
       waitlistInvalid: waitlistStatus === "invalid",
       waitlistError: waitlistStatus === "error",
@@ -74,14 +83,13 @@ const features: {
 ];
 
 function Home() {
-  const { businessName, subscribed, waitlistInvalid, waitlistError } = Route.useLoaderData();
-  // Public landing renders FR by default (DEFAULT_LANG='fr'); a persisted
-  // FR|EN toggle arrives with the full i18n phase.
-  const L: Lang = DEFAULT_LANG;
+  const { businessName, subscribed, waitlistInvalid, waitlistError, lang: serverLang } = Route.useLoaderData();
+  // FR-first: the server already resolved the visitor's persisted language.
+  const L: Lang = (serverLang as Lang | undefined) ?? DEFAULT_LANG;
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader />
+      <AppHeader lang={L} />
 
       {/* Hero Section */}
       <section className="relative flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-4 pb-12 pt-8 text-center sm:px-6 sm:pb-20 sm:pt-14">

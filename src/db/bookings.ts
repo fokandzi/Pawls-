@@ -99,8 +99,6 @@ export async function createBookingCore(request: Request, data: BookingInput): P
   };
 }
 
-export const createBooking = createServerFn({ method: "POST" })
-  .validator((data: unknown): BookingInput => parseBookingInput(data))
-  .handler(async ({ data, request }): Promise<BookingResult> => {
-    return createBookingCore(request, data);
-  });
+// The server-function flavour of booking creation was removed: it had no caller
+// (the booking form posts to /api/bookings, which uses createBookingCore)
+// and a server function nobody imports is still a public endpoint id.
