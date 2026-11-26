@@ -3,7 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { getTrendingDogs } from "../db/schema";
 import { seoHead } from "../lib/seo";
-import { t, DEFAULT_LANG } from "../lib/i18n";
+import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 import { EmptyState } from "../lib/empty-state";
 
 type TrendingDog = {
@@ -39,38 +40,47 @@ function rankBadge(index: number) {
 
 export const Route = createFileRoute("/viral")({
   // FR-first SSR title/meta (P2 item 5).
-  head: () =>
-    seoHead({
-      title: t("viral.title", DEFAULT_LANG),
-      description: t("viral.seoDesc", DEFAULT_LANG),
+  head: ({ loaderData }) => {
+    const L: Lang = (loaderData as { lang?: Lang } | undefined)?.lang ?? DEFAULT_LANG;
+    return seoHead({
+      title: t("viral.title", L),
+      description: t("viral.seoDesc", L),
       path: "/viral",
-    }),
+    });
+  },
   loader: async () => {
+    let lang: Lang = DEFAULT_LANG;
     try {
-      return { dogs: await getTrendingDogs(), error: "" };
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    try {
+      return { dogs: await getTrendingDogs(), error: "", lang };
     } catch (err: any) {
-      return { dogs: [], error: err?.message || "Failed to load trending dogs" };
+      return { dogs: [], error: err?.message || "Failed to load trending dogs", lang };
     }
   },
   component: ViralPage,
 });
 
 function ViralPage() {
-  const { dogs, error } = Route.useLoaderData();
+  const { dogs, error, lang: serverLang } = Route.useLoaderData() as { dogs: TrendingDog[]; error: string; lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
   const [selectedDog, setSelectedDog] = useState<TrendingDog | null>(null);
 
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="viral" />
+      <AppHeader active="viral" lang={L} />
 
       {/* Hero */}
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-8 pt-12 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-           Viral Paws
+           {t("viral.pageTitle", L)}
         </h1>
         <p className="mt-3 text-lg text-gray-600">
-          Demo feed — the viral leaderboard is coming soon
+          {t("viral.subtitle", L)}
         </p>
 
         {/* Plus upsell banner */}
@@ -78,7 +88,7 @@ function ViralPage() {
           to="/plus"
           className="mx-auto mt-6 inline-flex max-w-md items-center gap-2 rounded-full bg-gradient-to-r from-[var(--pawls-gold-400)] to-[var(--pawls-terracotta-500)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--pawls-cream-50)]0/25 transition-all hover:from-[var(--pawls-cream-50)]0 hover:to-[var(--pawls-terracotta-700)] hover:shadow-xl hover:scale-105"
         >
-           Pawls Plus — coming soon →
+           {t("viral.plusCta", L)}
         </Link>
       </section>
 
@@ -89,18 +99,18 @@ function ViralPage() {
           {false && (
             <div className="flex flex-col items-center justify-center py-20">
               <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[var(--pawls-cream-200)] border-t-[var(--pawls-terracotta-500)]" />
-              <p className="text-gray-500">Loading trending dogs...</p>
+              <p className="text-gray-500">{t("viral.loading", L)}</p>
             </div>
           )}
 
           {/* Error */}
           {error && (
-            <EmptyState emoji="" title="Couldn't load trending dogs" description={error} />
+            <EmptyState emoji="" title={t("viral.errorTitle", L)} description={error} />
           )}
 
           {/* Empty state */}
           {!error && dogs.length === 0 && (
-            <EmptyState emoji="" title="No trending dogs yet" description="Be the first to make your dog go viral!" action={{ label: " Create Profile", to: "/match/create" }} />
+            <EmptyState emoji="" title={t("viral.emptyTitle", L)} description={t("viral.emptyDesc", L)} action={{ label: t("viral.emptyAction", L), to: "/match/create" }} />
           )}
 
           {/* Dog grid */}
@@ -156,6 +166,7 @@ function ViralPage() {
             {/* Close button */}
             <button
               onClick={() => setSelectedDog(null)}
+              aria-label={t("viral.close", L)}
               className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-gray-600 shadow-sm transition-colors hover:bg-white hover:text-gray-900"
             >
               
@@ -172,7 +183,7 @@ function ViralPage() {
                 />
               ) : null}
               <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-sm font-bold text-white backdrop-blur-sm">
-                 {selectedDog.swipe_count} likes
+                 {selectedDog.swipe_count} {t("viral.swipes", L)}
               </span>
             </div>
 
@@ -181,12 +192,12 @@ function ViralPage() {
               <h2 className="text-2xl font-extrabold text-gray-900">{selectedDog.dog_name}</h2>
               <p className="text-gray-500">{selectedDog.breed}</p>
               <p className="mt-2 text-sm text-gray-600"> {selectedDog.location}</p>
-              <p className="text-sm text-gray-500">Owner: {selectedDog.owner_name}</p>
+              <p className="text-sm text-gray-500">{t("viral.owner", L)} {selectedDog.owner_name}</p>
 
               {/* Social links */}
               {(selectedDog.instagram || selectedDog.tiktok || selectedDog.twitter || selectedDog.youtube) && (
                 <div className="mt-4 border-t border-[var(--pawls-cream-100)] pt-4">
-                  <p className="mb-2 text-xs font-semibold text-gray-500"> Social Media</p>
+                  <p className="mb-2 text-xs font-semibold text-gray-500"> {t("viral.social", L)}</p>
                   <div className="flex items-center gap-3">
                     {selectedDog.instagram && (
                       <a
@@ -242,13 +253,13 @@ function ViralPage() {
                   to="/match"
                   className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[var(--pawls-terracotta-500)]/25 transition-colors hover:bg-[var(--pawls-terracotta-700)]"
                 >
-                   Swipe on more dogs
+                   {t("viral.moreDogs", L)}
                 </Link>
                 <Link
                   to="/plus"
                   className="inline-flex w-full items-center justify-center gap-1 rounded-full bg-gradient-to-r from-[var(--pawls-gold-400)] to-[var(--pawls-terracotta-500)] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[var(--pawls-cream-50)]0/25 transition-all hover:from-[var(--pawls-cream-50)]0 hover:to-[var(--pawls-terracotta-700)]"
                 >
-                   Pawls Plus — coming soon
+                   {t("viral.plusComing", L)}
                 </Link>
               </div>
             </div>
@@ -257,7 +268,7 @@ function ViralPage() {
       )}
 
       {/* Footer */}
-      <AppFooter />
+      <AppFooter lang={L} />
     </div>
   );
 }

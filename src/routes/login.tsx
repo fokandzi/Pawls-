@@ -2,8 +2,16 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 export const Route = createFileRoute("/login")({
+  loader: async (): Promise<{ lang: Lang }> => {
+    try {
+      return { lang: await resolveRouteLang() };
+    } catch {
+      return { lang: DEFAULT_LANG };
+    }
+  },
   head: () =>
     seoHead({
       title: t("auth.login.seoTitle", DEFAULT_LANG),
@@ -14,12 +22,13 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const L: Lang = DEFAULT_LANG;
+  const { lang: serverLang } = Route.useLoaderData() as { lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
   const search = (Route.useSearch() as any) ?? {};
   const reset = String(search?.reset ?? "") === "1";
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader />
+      <AppHeader lang={L} />
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-20 pt-16 sm:pt-20">
         <div className="mx-auto w-full max-w-md">
           <div className="text-center">
@@ -53,7 +62,7 @@ function LoginPage() {
           </form>
         </div>
       </section>
-      <AppFooter />
+      <AppFooter lang={L} />
     </div>
   );
 }

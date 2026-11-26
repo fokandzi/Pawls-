@@ -378,10 +378,20 @@ const getRescueDogs = createServerFn({ method: "GET" }).handler(async () => {
 
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 export const Route = createFileRoute("/rescue")({
   head: () => seoHead({ title: t("rescue.title", DEFAULT_LANG), description: t("rescue.desc", DEFAULT_LANG), path: "/rescue" }),
-  loader: () => getRescueDogs(),
+  loader: async () => {
+    const data = await getRescueDogs();
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    return { ...data, lang };
+  },
   component: RescuePage,
 });
 
@@ -443,10 +453,10 @@ function genderLabel(gender: string, lang: Lang): string {
 // ── Component ────────────────────────────────────────────────────────────────
 
 function RescuePage() {
-  const { dogs, error } = Route.useLoaderData();
+  const { dogs, error, lang: serverLang } = Route.useLoaderData() as { dogs: RescueDog[] | null; error: string | null; lang?: Lang };
   const routerState = useRouterState();
   const isExactRescue = routerState.location.pathname === "/rescue";
-  const lang = DEFAULT_LANG;
+  const lang: Lang = serverLang ?? DEFAULT_LANG;
 
   // Filter state
   const [sizeFilter, setSizeFilter] = useState<string | null>(null);
@@ -467,7 +477,7 @@ function RescuePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="rescue" />
+      <AppHeader active="rescue" lang={lang} />
 
       {isExactRescue ? (
         <>
@@ -721,7 +731,7 @@ function RescuePage() {
       )}
 
       {/* Footer */}
-      <AppFooter />
+      <AppFooter lang={lang} />
     </div>
   );
 }

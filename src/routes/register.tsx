@@ -2,10 +2,18 @@ import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../lib/password-policy";
 import { trackEvent } from "../lib/analytics";
 
 export const Route = createFileRoute("/register")({
+  loader: async (): Promise<{ lang: Lang }> => {
+    try {
+      return { lang: await resolveRouteLang() };
+    } catch {
+      return { lang: DEFAULT_LANG };
+    }
+  },
   head: () =>
     seoHead({
       title: t("auth.register.seoTitle", DEFAULT_LANG),
@@ -16,7 +24,8 @@ export const Route = createFileRoute("/register")({
 });
 
 function RegisterPage() {
-  const L: Lang = DEFAULT_LANG;
+  const { lang: serverLang } = Route.useLoaderData() as { lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
   const search = (Route.useSearch() as any) ?? {};
   const attrToken = typeof search?.c === "string" ? search.c.slice(0, 400) : "";
   const campaign = typeof search?.camp === "string" ? search.camp.slice(0, 96) : "";
@@ -30,7 +39,7 @@ function RegisterPage() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <AppHeader />
+      <AppHeader lang={L} />
       <section className="bg-gradient-to-b from-[var(--pawls-cream-50)] to-white px-6 pb-20 pt-16 sm:pt-20">
         <div className="mx-auto w-full max-w-md">
           <div className="text-center">
@@ -162,7 +171,7 @@ function RegisterPage() {
           </p>
         </div>
       </section>
-      <AppFooter />
+      <AppFooter lang={L} />
     </div>
   );
 }

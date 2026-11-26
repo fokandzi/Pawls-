@@ -50,10 +50,20 @@ const getBreeders = createServerFn({ method: "GET" }).handler(async () => {
 
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 export const Route = createFileRoute("/breed")({
   head: () => seoHead({ title: t("breed.title", DEFAULT_LANG), description: t("breed.desc", DEFAULT_LANG), path: "/breed" }),
-  loader: () => getBreeders(),
+  loader: async () => {
+    const data = await getBreeders();
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    return { ...data, lang };
+  },
   component: BreedPage,
 });
 
@@ -88,24 +98,25 @@ function membershipBadge(tier: string, lang: Lang) {
 function verificationBadge(status: string, isDemo: boolean, lang: Lang) {
   // Honest display (owner directive 2026-08-14): demo fixture breeders must
   // NEVER look like genuine pending applicants — a demo row ALWAYS shows
-  // "Demo listing", regardless of its verification_status column. Only real
-  // (non-demo) rows may show a status badge ("Verified" / "⏳ Pending").
+  // "Demo listing", regardless of its verification_status column. Real rows are
+  // shown as pending: there is no verification programme to pass.
   if (isDemo) {
     return { label: t("breed.demoBadge", lang), bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
   }
-  if (status === "verified" || status === "featured") {
-    return { label: t("breed.verified", lang), bg: "bg-emerald-100", text: "text-emerald-700" };
-  }
+  // 2026-11-26 content patch: Pawls runs NO verification programme, so no real
+  // row may be labelled "Vérifié" — every real row is honestly shown as pending
+  // until a programme exists. (`status` is kept in the signature for callers.)
+  void status;
   return { label: t("breed.pending", lang), bg: "bg-[var(--pawls-cream-100)]", text: "text-[var(--pawls-gold-500)]" };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 function BreedPage() {
-  const { breeders, error } = Route.useLoaderData();
+  const { breeders, error, lang: serverLang } = Route.useLoaderData() as { breeders: Breeder[] | null; error: string | null; lang?: Lang };
   const routerState = useRouterState();
   const isExactBreed = routerState.location.pathname === "/breed";
-  const lang = DEFAULT_LANG;
+  const lang: Lang = serverLang ?? DEFAULT_LANG;
 
   // Extract unique breeds for filter pills
   const allBreeds = breeders
@@ -115,7 +126,7 @@ function BreedPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Header */}
-      <AppHeader active="breed" />
+      <AppHeader active="breed" lang={lang} />
 
       {isExactBreed ? (
         <>
@@ -293,7 +304,7 @@ function BreedPage() {
       )}
 
       {/* Footer */}
-      <AppFooter />
+      <AppFooter lang={lang} />
     </div>
   );
 }

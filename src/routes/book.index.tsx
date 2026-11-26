@@ -62,6 +62,7 @@ function renderStars(rating: number) {
 
 import { seoHead } from "../lib/seo";
 import { t, DEFAULT_LANG, type Lang } from "../lib/i18n";
+import { resolveRouteLang } from "../lib/i18n/route-lang";
 
 const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
   try {
@@ -93,13 +94,22 @@ const loadProviders = createServerFn({ method: "GET" }).handler(async () => {
 
 export const Route = createFileRoute("/book/")({
   head: () => seoHead({ title: t("book.seoTitle", DEFAULT_LANG), description: t("book.seoDesc", DEFAULT_LANG) }),
-  loader: () => loadProviders(),
+  loader: async () => {
+    const data = await loadProviders();
+    let lang: Lang = DEFAULT_LANG;
+    try {
+      lang = await resolveRouteLang();
+    } catch {
+      lang = DEFAULT_LANG;
+    }
+    return { ...data, lang };
+  },
   component: BookPage,
 });
 
 function BookPage() {
-  const L: Lang = DEFAULT_LANG;
-  const { providers, error } = Route.useLoaderData();
+  const { providers, error, lang: serverLang } = Route.useLoaderData() as { providers: Provider[] | null; error: string | null; lang?: Lang };
+  const L: Lang = serverLang ?? DEFAULT_LANG;
   return (
     <>
           {/* Hero strip */}
