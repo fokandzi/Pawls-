@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
@@ -177,7 +176,6 @@ function MyBookingsPage() {
 
   return (
     <div className="min-h-screen bg-[var(--pawls-cream-50)]">
-      <AppHeader lang={lang} />
       <main className="mx-auto w-full max-w-3xl px-4 py-10">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -263,7 +261,6 @@ function MyBookingsPage() {
 
         <p className="mt-8 text-xs text-gray-500">{t("myBookings.paymentsOff", lang)}</p>
       </main>
-      <AppFooter lang={lang} />
     </div>
   );
 }
