@@ -10,8 +10,11 @@
  * EN-only `SEO` map. This test locks that in without needing a browser:
  *   1. every new key resolves in FR and in EN, reads "… — Pawls"/"… | Pawls"
  *      and is not a raw-key fallback;
- *   2. each route file actually calls `t("<key>", DEFAULT_LANG)` and no longer
- *      reads the EN-only map for that page;
+ *   2. each route file actually calls `t("<key>", <lang>)`, where <lang> is the
+ *      route's resolved language (`L`, derived from the loader with
+ *      `?? DEFAULT_LANG`) or `DEFAULT_LANG` itself on the routes that resolve
+ *      no route language; `DEFAULT_LANG` stays the fallback, `seoHead(` is used,
+ *      and no hardcoded title string survives;
  *   3. the root route no longer hard-codes the EN default title/description.
  */
 import { describe, expect, test } from "bun:test";
@@ -22,16 +25,23 @@ import { t } from "./i18n";
 const ROUTES = join(import.meta.dir, "..", "routes");
 const read = (file: string) => readFileSync(join(ROUTES, file), "utf8");
 
-/** [route file, i18n key used for the SSR title] */
-const TITLE_WIRING: Array<[string, string]> = [
-  ["match.my-dogs.tsx", "mydogs.title"],
-  ["match.matches.tsx", "matches.title"],
-  ["match.conversations.tsx", "msg.title"],
-  ["match.conversations_.$id.tsx", "msg.threadTitle"],
-  ["viral.tsx", "viral.title"],
-  ["invite.tsx", "invite.seoTitle"],
-  ["breed.$breederId.tsx", "breederDetail.seoTitle"],
-  ["rescue.$dogId.tsx", "rescueDetail.seoTitle"],
+/**
+ * [route file, i18n key used for the SSR title, language expression passed to `t`]
+ *
+ * `L` = the route's resolved language (FR-first, read from the loader). Routes
+ * that resolve no route language must still pass `DEFAULT_LANG` explicitly.
+ */
+type TitleWiring = { file: string; key: string; lang: "L" | "DEFAULT_LANG" };
+
+const TITLE_WIRING: TitleWiring[] = [
+  { file: "match.my-dogs.tsx", key: "mydogs.title", lang: "DEFAULT_LANG" },
+  { file: "match.matches.tsx", key: "matches.title", lang: "DEFAULT_LANG" },
+  { file: "match.conversations.tsx", key: "msg.title", lang: "DEFAULT_LANG" },
+  { file: "match.conversations_.$id.tsx", key: "msg.threadTitle", lang: "DEFAULT_LANG" },
+  { file: "viral.tsx", key: "viral.title", lang: "L" },
+  { file: "invite.tsx", key: "invite.seoTitle", lang: "L" },
+  { file: "breed.$breederId.tsx", key: "breederDetail.seoTitle", lang: "L" },
+  { file: "rescue.$dogId.tsx", key: "rescueDetail.seoTitle", lang: "L" },
 ];
 
 /** Every title/description key added by item 5 must resolve in both languages. */
@@ -84,12 +94,38 @@ describe("FR SEO title keys", () => {
 });
 
 describe("route wiring (no EN-only titles left)", () => {
-  for (const [file, key] of TITLE_WIRING) {
-    test(`${file} renders its title from t("${key}")`, () => {
+  for (const { file, key, lang } of TITLE_WIRING) {
+    test(`${file} renders its title from t("${key}", ${lang})`, () => {
       const src = read(file);
-      expect(src).toContain(`t("${key}", DEFAULT_LANG)`);
+      // The title is dictionary-driven, in the route's own language.
+      expect(src).toContain(`t("${key}", ${lang})`);
       expect(src).toContain("seoHead(");
+      // DEFAULT_LANG is still there as the fallback, never dropped.
       expect(src).toContain("DEFAULT_LANG");
+
+      if (lang === "L") {
+        // `L` must be the language the loader resolved, defaulting to DEFAULT_LANG
+        // — not a bare constant and not a hardcoded "fr".
+        expect(src).toMatch(
+          /const L: Lang = \(loaderData as \{[^{}]*\}[^)]*\)\?\.lang \?\? DEFAULT_LANG;/,
+        );
+        expect(src).toContain("resolveRouteLang");
+        expect(src).toContain("?? DEFAULT_LANG");
+      }
+    });
+
+    test(`${file} has no hardcoded title string`, () => {
+      const src = read(file);
+      const titleLines = src
+        .split("\n")
+        .filter((line) => /^\s*title:/.test(line));
+      expect(titleLines.length).toBeGreaterThan(0);
+      for (const line of titleLines) {
+        // Every SSR title must come from the dictionary, in a resolved language.
+        expect(line).toMatch(
+          /^\s*title: (seoFill\()?t\("[^"]+", (L|DEFAULT_LANG)\)/,
+        );
+      }
     });
   }
 
