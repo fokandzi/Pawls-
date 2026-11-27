@@ -18,9 +18,15 @@
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SERVER_FN_NAMES, SERVER_FN_ID_SUFFIX } from "./server-fn-allowlist";
+import {
+  SERVER_FN_NAMES,
+  SERVER_FN_SOURCES,
+  SERVER_FN_ID_SUFFIX,
+  serverFnId,
+} from "./server-fn-allowlist";
 import {
   serverFnGuardResponse,
   SERVER_FN_GUARD_HEADER,
@@ -54,7 +60,6 @@ const PUBLIC_READ_ONLY = new Map<string, string>([
   ["getDogDetail", "public Rescue dog page"],
   ["getBreeders", "public Breed listings"],
   ["getBreederDetail", "public Breed breeder page"],
-  ["getBreederCount", "public Breed registration page — count of breeders"],
 ]);
 
 /** Tokens that prove identity is established INSIDE the handler. */
@@ -271,8 +276,23 @@ describe("F3b — an unknown server-function id answers a controlled 404", () =>
   });
 
   test("a registered id is passed through to the framework (no false 404s)", () => {
-    for (const name of SERVER_FN_NAMES) {
-      expect(serverFnGuardResponse(new Request(`http://127.0.0.1:3999/_serverFn/${name}${SERVER_FN_ID_SUFFIX}`))).toBeNull();
+    // The id the build actually serves is the sha256 of
+    // `<file>--<name>_createServerFn_handler`, NOT the bare name+suffix.
+    for (const fn of SERVER_FN_SOURCES) {
+      const id = serverFnId(fn.file, fn.name);
+      expect(serverFnGuardResponse(new Request(`http://127.0.0.1:3999/_serverFn/${id}`))).toBeNull();
+    }
+  });
+
+  test("the un-hashed `<name>_createServerFn_handler` form is NOT a known id", () => {
+    // Regression for the launch-line defect: an allowlist built from
+    // `${name}${SERVER_FN_ID_SUFFIX}` matches nothing the framework serves, so a
+    // deployed guard would 404 every genuine call. Every name must be refused
+    // in that form and accepted only under its derived id.
+    for (const fn of SERVER_FN_SOURCES) {
+      const bare = `${fn.name}${SERVER_FN_ID_SUFFIX}`;
+      expect(bare).not.toBe(serverFnId(fn.file, fn.name));
+      expect(serverFnGuardResponse(new Request(`http://127.0.0.1:3999/_serverFn/${bare}`))!.status).toBe(404);
     }
   });
 
@@ -282,11 +302,28 @@ describe("F3b — an unknown server-function id answers a controlled 404", () =>
   });
 
   test("the allowlist is exactly the set of server functions in src (no drift either way)", () => {
-    const scanned = new Set(FUNCTIONS.map((f) => f.name));
-    const allowed = new Set<string>(SERVER_FN_NAMES);
-    const missing = [...scanned].filter((n) => !allowed.has(n));
-    const stale = [...allowed].filter((n) => !scanned.has(n));
+    // Both halves matter: the NAME (a deleted function must lose its entry) and
+    // the FILE (the id is derived from it — a function moved to another file
+    // gets a different id, so a stale path would allowlist nothing).
+    const key = (fn: { file: string; name: string }) => `${fn.file}#${fn.name}`;
+    const scanned = new Set(FUNCTIONS.map(key));
+    const allowed = new Set(SERVER_FN_SOURCES.map(key));
+    const missing = [...scanned].filter((k) => !allowed.has(k));
+    const stale = [...allowed].filter((k) => !scanned.has(k));
     expect({ missing, stale }).toEqual({ missing: [], stale: [] });
+  });
+
+  test("the ids are sha256 hex of `<file>--<name>_createServerFn_handler`", () => {
+    // Pins the derivation to the framework's, so a change in either the table
+    // or the hashing shows up here rather than as 404s in production.
+    for (const fn of SERVER_FN_SOURCES) {
+      const expected = createHash("sha256")
+        .update(`${fn.file}--${fn.name}_createServerFn_handler`)
+        .digest("hex");
+      expect(serverFnId(fn.file, fn.name)).toBe(expected);
+      expect(serverFnId(fn.file, fn.name)).toMatch(/^[0-9a-f]{64}$/);
+    }
+    expect(new Set(SERVER_FN_NAMES).size).toBe(SERVER_FN_NAMES.length);
   });
 
   test("both HTTP entries consult the guard before the SSR handler", () => {

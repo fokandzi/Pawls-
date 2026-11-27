@@ -1,4 +1,3 @@
-import { AppHeader, AppFooter } from "../lib/app-header";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
@@ -205,7 +204,6 @@ function ProviderDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[var(--pawls-cream-50)]">
-      <AppHeader lang={lang} />
       <main className="mx-auto w-full max-w-4xl px-4 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-gray-900">{t("providerSpace.heading", lang)}</h1>
@@ -376,7 +374,6 @@ function ProviderDashboardPage() {
           </div>
         )}
       </main>
-      <AppFooter lang={lang} />
     </div>
   );
 }

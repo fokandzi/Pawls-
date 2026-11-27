@@ -11,6 +11,11 @@
 // an HTTPError inside the SSR handler, which surfaces as
 // `500 {"status":500,"unhandled":true,"message":"HTTPError"}` — a wrong status
 // that reads like a crash. A removed endpoint is simply not there: 404.
+//
+// The ids the framework serves are sha256 hashes of `<source file>--<handler
+// name>` (see `server-fn-allowlist.ts`), not `<name>_createServerFn_handler`. The
+// allowlist derives them the same way, so a genuine call is passed through and
+// only ids this build does not register are refused.
 import { SERVER_FN_BASE, isKnownServerFnId } from "./src/lib/server-fn-allowlist.ts";
 
 /** Marker header on every guard-generated 404, so the response is provably ours. */
