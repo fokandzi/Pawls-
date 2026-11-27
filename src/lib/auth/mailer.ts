@@ -98,7 +98,48 @@ function devRawLinksAllowed(): boolean {
   );
 }
 
+/**
+ * mail_log retention policy (2026-11-27).
+ *
+ * mail_log exists to answer "did we try to send this, and did it work?" for
+ * support and incident work. It is NOT an archive: bodies, addresses and
+ * provider ids have no business sitting there forever. Rows older than
+ * MAIL_LOG_RETENTION_DAYS are deleted — opportunistically once an hour from a
+ * sending process (see maybePurgeMailLog) and on demand via
+ * scripts/security/purge-mail-log.ts, which is what a scheduled job should run.
+ */
+export const MAIL_LOG_RETENTION_DAYS = 30;
+
+/** Delete mail_log rows older than `retentionDays`. Idempotent; returns the count. */
+export async function purgeMailLog(retentionDays = MAIL_LOG_RETENTION_DAYS): Promise<number> {
+  const days = Math.max(1, Math.floor(retentionDays));
+  try {
+    const rows = (await sql()`
+      DELETE FROM mail_log
+      WHERE created_at < NOW() - make_interval(days => ${days})
+      RETURNING id
+    `) as unknown as unknown[];
+    return rows.length;
+  } catch (err) {
+    // A retention sweep must never fail a send.
+    console.error("[auth-mail] mail_log retention sweep failed (continuing)", err);
+    return 0;
+  }
+}
+
+let lastMailLogSweep = 0;
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Fire-and-forget retention sweep, at most once per process per hour. */
+function maybePurgeMailLog(): void {
+  const now = Date.now();
+  if (now - lastMailLogSweep < SWEEP_INTERVAL_MS) return;
+  lastMailLogSweep = now;
+  void purgeMailLog();
+}
+
 export async function sendMail(message: MailMessage): Promise<MailResult> {
+  maybePurgeMailLog();
   const mode = mailMode();
   if (mode === "test") {
     const raw = `TO: ${message.to}\nSUBJECT: ${message.subject}\nTEXT:\n${message.text}\nHTML:\n${message.html}`;

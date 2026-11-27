@@ -5,7 +5,7 @@
 // / 429 rate limited / 503 email unavailable. Never an uncontrolled 500.
 import { sql } from "./db";
 import { ensureAuthTables, writeAudit } from "./lib/auth/ensure";
-import { hashPassword, verifyPassword, needsRehash, constantTimeEqual } from "./lib/auth/hash";
+import { hashPassword, verifyPassword, needsRehash, isLegacySha256Hash, constantTimeEqual } from "./lib/auth/hash";
 import { issueEmailToken, consumeEmailToken } from "./lib/auth/email-tokens";
 import {
   createSession, revokeSession, revokeOtherSessions, revokeAllSessions,
@@ -496,7 +496,7 @@ export async function handleResendVerificationRequest(request: Request): Promise
   }
   const ipLimit = await rateLimit("resend-verification-request", clientIp(request));
   if (ipLimit.limited) return rateLimitPage(request, ipLimit.retryAfterSeconds);
-  const addrLimit = await rateLimit("resend-verification-request", `email:${email}`);
+  const addrLimit = await rateLimit("resend-verification-request", `email:${sha256Hex(email)}`);
   if (addrLimit.limited) return rateLimitPage(request, addrLimit.retryAfterSeconds);
 
   if (!emailConfigured()) {
@@ -561,11 +561,14 @@ async function handleLogin(request: Request): Promise<Response> {
       links: NAV_HOME_LOGIN,
     });
   }
-  const rl = await rateLimit("login", `${email}|${clientIp(request)}`);
+  // Rate-limit keys never hold a raw address or token: `rate_limits` is a
+  // long-lived table that gets dumped and read during incident work, so both
+  // identity components are SHA-256'd before they become a key.
+  const rl = await rateLimit("login", `${sha256Hex(email)}|${clientIp(request)}`);
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   // Per-account cap across rotating IPs (the email+IP key alone allows one
   // fresh budget per address an attacker controls).
-  const accountRl = await rateLimit("login-account", email);
+  const accountRl = await rateLimit("login-account", sha256Hex(email));
   if (accountRl.limited) return rateLimitPage(request, accountRl.retryAfterSeconds);
   try {
     await ensureAuthTables();
@@ -573,6 +576,14 @@ async function handleLogin(request: Request): Promise<Response> {
     const user = rows[0] as any;
     const ok = user ? await verifyPassword(password, user.password_hash) : false;
     if (!user || !ok) {
+      // A bare legacy SHA-256 row is refused by verifyPassword (see hash.ts).
+      // Say so once per attempt, with the id only — never the address or the
+      // password — so the wrap script can be run before/after a deploy.
+      if (user && isLegacySha256Hash(user.password_hash)) {
+        console.warn(
+          `[auth] login refused for user ${user.id}: stored password is a bare sha256 digest — run scripts/security/wrap-legacy-password-hashes.ts --apply`,
+        );
+      }
       // Same message for unknown email vs wrong password (no enumeration).
       return errorPage(request, {
         titleKey: "auth.err.invalidCredentialsTitle",
@@ -710,7 +721,7 @@ async function handlePasswordResetRequest(request: Request): Promise<Response> {
       links: RESET_LINKS,
     });
   }
-  const rl = await rateLimit("reset-request", email);
+  const rl = await rateLimit("reset-request", sha256Hex(email));
   if (rl.limited) return rateLimitPage(request, rl.retryAfterSeconds);
   try {
     await ensureAuthTables();

@@ -143,6 +143,18 @@ describe("email tokens", () => {
     expect(String(row.body)).toContain("token=[redacted]");
   });
 
+  test("mail_log retention deletes only rows past the policy and is idempotent", async () => {
+    const oldAddr = email("mail-old");
+    const freshAddr = email("mail-fresh");
+    await mailer.sendMail(mailer.verificationEmail(oldAddr, "tok-old"));
+    await mailer.sendMail(mailer.verificationEmail(freshAddr, "tok-fresh"));
+    await q`UPDATE mail_log SET created_at = NOW() - interval '40 days' WHERE "to" = ${oldAddr}`;
+    expect(await mailer.purgeMailLog(mailer.MAIL_LOG_RETENTION_DAYS)).toBeGreaterThanOrEqual(1);
+    expect(await mailer.purgeMailLog(mailer.MAIL_LOG_RETENTION_DAYS)).toBe(0);
+    expect(await q`SELECT 1 FROM mail_log WHERE "to" = ${oldAddr}`).toHaveLength(0);
+    expect(await q`SELECT 1 FROM mail_log WHERE "to" = ${freshAddr}`).toHaveLength(1);
+  });
+
   test("migration 011 redacts stored links idempotently and expires live tokens", async () => {
     const to = email("legacy-mail");
     await q`INSERT INTO mail_log ("to", subject, body, mode) VALUES
@@ -215,11 +227,32 @@ describe("legacy SHA-256 passwords", () => {
     expect(await hash.verifyPassword("pw-legacy-123", after)).toBe(true);
   });
 
-  test("login with a bare legacy hash also upgrades", async () => {
+  test("a bare legacy digest no longer authenticates and is not upgraded", async () => {
+    // Weak-credential remediation: only the wrapped form is a credential.
+    const bare = hash.legacySha256("bare-legacy-pw");
+    expect(await hash.verifyPassword("bare-legacy-pw", bare)).toBe(false);
+    expect(hash.isLegacySha256Hash(bare)).toBe(true);
     const addr = email("login-bare");
-    const uid = await insertUser(addr, { verified: true, passwordHash: hash.legacySha256("bare-legacy-pw") });
-    expect((await auth.handleAuthPost(post("/auth/login", { email: addr, password: "bare-legacy-pw" }))).status).toBe(302);
+    const uid = await insertUser(addr, { verified: true, passwordHash: bare });
+    const res = await auth.handleAuthPost(post("/auth/login", { email: addr, password: "bare-legacy-pw" }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("set-cookie") ?? "").toBe("");
+    expect(await passwordHashOf(uid)).toBe(bare);
+    // The same password works as soon as the row is wrapped — nothing reset.
+    expect((await legacy.wrapLegacyPasswordHashes(true)).wrapped).toBeGreaterThanOrEqual(1);
+    const after = await auth.handleAuthPost(post("/auth/login", { email: addr, password: "bare-legacy-pw" }));
+    expect(after.status).toBe(302);
     expect((await passwordHashOf(uid)).startsWith("scrypt$")).toBe(true);
+  });
+
+  test("rate_limits keys hold no raw email address", async () => {
+    const addr = email("rl-email");
+    const uid = await insertUser(addr, { verified: true, passwordHash: await hash.hashPassword("rl-password-123") });
+    expect(uid).toBeGreaterThan(0);
+    expect((await auth.handleAuthPost(post("/auth/login", { email: addr, password: "rl-password-123" }))).status).toBe(302);
+    const keys = await q`SELECT key FROM rate_limits WHERE action IN ('login', 'login-account')`;
+    expect(keys.length).toBeGreaterThan(0);
+    expect(JSON.stringify(keys)).not.toContain(addr);
   });
 });
 
