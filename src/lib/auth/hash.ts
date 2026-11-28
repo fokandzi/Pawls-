@@ -5,16 +5,16 @@
  *   N=16384, r=8, p=1, 16-byte random salt, 64-byte derived key.
  *
  * Legacy rows: pre-auth users were stored as unsalted SHA-256 hex (64 chars).
- * Those are verified via sha256 and upgraded to scrypt on the next successful
- * login (auth-handler handleLogin, via needsRehash). Plaintext is never stored
- * anywhere.
- *
- * Wrapped legacy rows: `sha256-scrypt$N$r$p$salt$hash` = scrypt(sha256hex(pw)).
- * wrapLegacySha256Hash() converts a bare SHA-256 row WITHOUT knowing the
- * password, so the unsalted digests stop sitting in the database while their
- * owners have not logged in yet (scripts/security/wrap-legacy-password-hashes.ts).
+ * Those digests are NO LONGER accepted at login (see verifyPassword): they must
+ * be wrapped first. wrapLegacySha256Hash() converts a bare SHA-256 row WITHOUT
+ * knowing the password, so the unsalted digests stop sitting in the database
+ * while their owners have not logged in yet
+ * (scripts/security/wrap-legacy-password-hashes.ts).
  * The owner's existing password keeps working; the next login re-hashes it as
  * plain scrypt.
+ *
+ * Wrapped legacy rows: `sha256-scrypt$N$r$p$salt$hash` = scrypt(sha256hex(pw)).
+ * This is the ONLY form a legacy row authenticates in.
  */
 import { scrypt as scryptCb, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
@@ -113,11 +113,14 @@ export async function verifyPassword(password: string, stored: string | null | u
   if (isScryptHash(stored)) return scryptMatches(password, stored);
   if (isWrappedLegacyHash(stored)) return scryptMatches(legacySha256(password), stored);
   if (isLegacySha256Hash(stored)) {
-    // Legacy unsalted sha256 — verify, then the caller upgrades to scrypt.
-    const digest = createHash("sha256").update(password).digest("hex");
-    const a = Buffer.from(digest, "utf8");
-    const b = Buffer.from(stored, "utf8");
-    return a.length === b.length && timingSafeEqual(a, b);
+    // REFUSED (2026-11-27). A bare unsalted SHA-256 digest is no longer a login
+    // credential: it is fast to brute-force and its presence in the table is the
+    // finding this change closes. Only the scrypt-wrapped form authenticates.
+    // Deploy order: run scripts/security/wrap-legacy-password-hashes.ts --apply
+    // BEFORE this code ships (docs/WEAK-CREDENTIAL-REMEDIATION.md). A refused
+    // account is not reset and its password still works once wrapped; if it is
+    // somehow still bare, the user recovers with the normal password-reset flow.
+    return false;
   }
   return false;
 }

@@ -25,8 +25,28 @@ export type EmailTokenKind = "verify" | "reset";
 
 const TTL: Record<EmailTokenKind, string> = { verify: "24 hours", reset: "1 hour" };
 
+/** Retention for spent/expired tokens — see purgeExpiredEmailTokens. */
+export const EMAIL_TOKEN_RETENTION_DAYS = 7;
+
+let lastTokenSweep = 0;
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Fire-and-forget purge, at most once per process per hour. Issuing a token is
+ * the one place every flow already writes here, so it is also the cheapest
+ * place to make sure expired and used tokens do not accumulate in production
+ * even when no scheduled job runs. Never fails the issuing flow.
+ */
+function maybePurgeExpiredTokens(): void {
+  const now = Date.now();
+  if (now - lastTokenSweep < SWEEP_INTERVAL_MS) return;
+  lastTokenSweep = now;
+  void purgeExpiredEmailTokens().catch(() => {});
+}
+
 /** Create a token for `userId`, store its hash, and return the raw value for the email. */
 export async function issueEmailToken(userId: number, kind: EmailTokenKind): Promise<string> {
+  maybePurgeExpiredTokens();
   const token = randomBytes(32).toString("base64url");
   if (kind === "reset") {
     await sql()`UPDATE email_tokens SET expires_at = NOW()
@@ -65,7 +85,7 @@ export async function consumeEmailToken(token: string, kind: EmailTokenKind): Pr
  * Delete tokens that expired or were used more than `retentionDays` ago.
  * Idempotent: a second run deletes nothing new. Returns the deleted count.
  */
-export async function purgeExpiredEmailTokens(retentionDays = 7): Promise<number> {
+export async function purgeExpiredEmailTokens(retentionDays = EMAIL_TOKEN_RETENTION_DAYS): Promise<number> {
   const days = Math.max(0, Math.floor(retentionDays));
   const rows = (await sql()`
     DELETE FROM email_tokens
